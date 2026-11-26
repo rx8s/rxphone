@@ -13,7 +13,23 @@ struct LibraryView: View {
 
     private struct ViewerTarget: Identifiable { let id: String }
 
-    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 2)]
+    /// State of a finger dragging across the grid in selection mode.
+    private struct DragSelect {
+        /// False when the drag started vertically: it belongs to scrolling.
+        let isActive: Bool
+        var startIndex = 0
+        /// Select or deselect, decided by the cell the drag started on.
+        var adding = true
+        /// Selection before the drag, so cells that leave the range revert.
+        var base: Set<String> = []
+    }
+
+    @State private var dragSelect: DragSelect?
+    @State private var gridWidth: CGFloat = 0
+
+    private static let cellMinSize: CGFloat = 100
+    private static let cellSpacing: CGFloat = 2
+    private let columns = [GridItem(.adaptive(minimum: cellMinSize), spacing: cellSpacing)]
 
     var body: some View {
         NavigationStack {
@@ -69,12 +85,16 @@ struct LibraryView: View {
     private var grid: some View {
         ScrollView {
             if library.status == .limited { limitedBanner }
-            LazyVGrid(columns: columns, spacing: 2) {
+            LazyVGrid(columns: columns, spacing: Self.cellSpacing) {
                 ForEach(library.assets, id: \.localIdentifier) { asset in
                     cell(for: asset)
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+            .simultaneousGesture(dragSelectGesture, including: isSelecting ? .all : .subviews)
         }
+        .scrollDisabled(dragSelect?.isActive == true)
+        .sensoryFeedback(.selection, trigger: selection.count) { _, _ in dragSelect?.isActive == true }
         .overlay {
             if library.isLoaded && library.assets.isEmpty {
                 ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
@@ -102,7 +122,7 @@ struct LibraryView: View {
         let id = asset.localIdentifier
         let selected = selection.contains(id)
         let size = library.sortOrder == .largest ? library.sizes[id].map(Self.format) : nil
-        return Button {
+        let activate = {
             if !isSelecting {
                 viewer = ViewerTarget(id: id)
             } else if selected {
@@ -110,19 +130,63 @@ struct LibraryView: View {
             } else {
                 selection.insert(id)
             }
-        } label: {
-            AssetThumbnail(
-                asset: asset,
-                manager: library.imageManager,
-                isSelecting: isSelecting,
-                isSelected: selected,
-                sizeText: size
-            )
         }
-        .buttonStyle(.plain)
+        // A tap gesture rather than a Button: Button still fires when a
+        // drag-select ends within its touch slop, re-toggling the start cell.
+        return AssetThumbnail(
+            asset: asset,
+            manager: library.imageManager,
+            isSelecting: isSelecting,
+            isSelected: selected,
+            sizeText: size
+        )
+        .onTapGesture(perform: activate)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(for: asset))
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(.default, activate)
         .accessibilityHint(isSelecting ? "แตะเพื่อเลือกหรือยกเลิก" : "แตะเพื่อดูเต็มจอ")
+    }
+
+    /// Drag sideways across cells to select (or deselect) a range, like Photos.
+    /// A drag that starts vertically is left to the ScrollView.
+    private var dragSelectGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                if dragSelect == nil {
+                    let t = value.translation
+                    guard abs(t.width) > abs(t.height),
+                          let start = index(at: value.startLocation) else {
+                        dragSelect = DragSelect(isActive: false)
+                        return
+                    }
+                    let id = library.assets[start].localIdentifier
+                    dragSelect = DragSelect(
+                        isActive: true,
+                        startIndex: start,
+                        adding: !selection.contains(id),
+                        base: selection
+                    )
+                }
+                guard let drag = dragSelect, drag.isActive,
+                      let current = index(at: value.location) else { return }
+                let range = min(drag.startIndex, current)...max(drag.startIndex, current)
+                let ids = Set(library.assets[range].map(\.localIdentifier))
+                selection = drag.adding ? drag.base.union(ids) : drag.base.subtracting(ids)
+            }
+            .onEnded { _ in dragSelect = nil }
+    }
+
+    /// Maps a point in the grid's own coordinates to an asset index, using the
+    /// same column math as `GridItem.adaptive`.
+    private func index(at point: CGPoint) -> Int? {
+        guard gridWidth > 0, !library.assets.isEmpty, point.y >= 0 else { return nil }
+        let spacing = Self.cellSpacing
+        let columnCount = max(Int((gridWidth + spacing) / (Self.cellMinSize + spacing)), 1)
+        let cellSize = (gridWidth - CGFloat(columnCount - 1) * spacing) / CGFloat(columnCount)
+        let column = min(max(Int(point.x / (cellSize + spacing)), 0), columnCount - 1)
+        let row = Int(point.y / (cellSize + spacing))
+        return min(row * columnCount + column, library.assets.count - 1)
     }
 
     private var limitedBanner: some View {
