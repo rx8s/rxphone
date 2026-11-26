@@ -10,6 +10,7 @@
 		A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */; };
 		AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */; };
 		C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BF1D87814390AC4ED5A511 /* LibraryView.swift */; };
+		EB1372980F72CF8C842DC2FD /* AssetViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB8A3F08208A78341802D3D /* AssetViewer.swift */; };
 		FA5136BADE60DABB42EA8B05 /* RxPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -18,6 +19,7 @@
 		3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RxPhoneApp.swift; sourceTree = "<group>"; };
 		58BF1D87814390AC4ED5A511 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetThumbnail.swift; sourceTree = "<group>"; };
+		ABB8A3F08208A78341802D3D /* AssetViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetViewer.swift; sourceTree = "<group>"; };
 		F4A375C669459BB71F384479 /* RxPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RxPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -26,6 +28,7 @@
 			isa = PBXGroup;
 			children = (
 				6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */,
+				ABB8A3F08208A78341802D3D /* AssetViewer.swift */,
 				58BF1D87814390AC4ED5A511 /* LibraryView.swift */,
 				1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */,
 				3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */,
@@ -105,6 +108,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */,
+				EB1372980F72CF8C842DC2FD /* AssetViewer.swift in Sources */,
 				C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */,
 				A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */,
 				FA5136BADE60DABB42EA8B05 /* RxPhoneApp.swift in Sources */,

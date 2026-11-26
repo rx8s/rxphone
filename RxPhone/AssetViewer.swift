@@ -1,0 +1,373 @@
+import AVFoundation
+import Photos
+import SwiftUI
+
+/// Full-screen pager over the library: swipe between items, pinch/double-tap
+/// to zoom photos, play videos, favorite and delete.
+struct AssetViewer: View {
+    let library: PhotoLibrary
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var position: String?
+    @State private var showsChrome = true
+    @State private var isZoomed = false
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    init(library: PhotoLibrary, startID: String) {
+        self.library = library
+        _position = State(initialValue: startID)
+    }
+
+    private var current: PHAsset? {
+        library.assets.first { $0.localIdentifier == position }
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            pager.ignoresSafeArea()
+        }
+        .overlay(alignment: .top) { if showsChrome { topBar.transition(.opacity) } }
+        .overlay(alignment: .bottom) { if showsChrome { bottomBar.transition(.opacity) } }
+        .statusBarHidden(!showsChrome)
+        .preferredColorScheme(.dark)
+        .onChange(of: position) { isZoomed = false }
+        .task(id: position) {
+            if let current { await library.measure([current]) }
+        }
+        .alert("ทำรายการไม่สำเร็จ", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("ตกลง", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var pager: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(library.assets, id: \.localIdentifier) { asset in
+                    AssetPage(
+                        asset: asset,
+                        isCurrent: asset.localIdentifier == position,
+                        isZoomed: $isZoomed,
+                        onTap: { withAnimation(.easeInOut(duration: 0.2)) { showsChrome.toggle() } }
+                    )
+                    .containerRelativeFrame([.horizontal, .vertical])
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $position)
+        .scrollIndicators(.hidden)
+        .scrollDisabled(isZoomed)
+    }
+
+    // MARK: - Chrome
+
+    private var topBar: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("ปิด")
+            Spacer()
+            if let date = current?.creationDate {
+                VStack(spacing: 0) {
+                    Text(date.formatted(date: .long, time: .omitted))
+                        .font(.subheadline.weight(.semibold))
+                    Text(date.formatted(date: .omitted, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Spacer()
+            Color.clear.frame(width: 44, height: 44)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .background {
+            LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        }
+    }
+
+    private var bottomBar: some View {
+        let isFavorite = current?.isFavorite ?? false
+        return HStack {
+            Button { Task { await toggleFavorite() } } label: {
+                Image(systemName: isFavorite ? "heart.fill" : "heart")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(isFavorite ? "เลิกชื่นชอบ" : "ชื่นชอบ")
+            Spacer()
+            Text(infoText)
+                .font(.footnote)
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.85))
+            Spacer()
+            Button(role: .destructive) { Task { await deleteCurrent() } } label: {
+                Image(systemName: "trash")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("ลบ")
+        }
+        .foregroundStyle(.white)
+        .disabled(current == nil || isWorking)
+        .padding(.horizontal, 8)
+        .background {
+            LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        }
+    }
+
+    private var infoText: String {
+        guard let asset = current else { return "" }
+        var parts: [String] = []
+        if asset.mediaType == .video {
+            parts.append(AssetThumbnail.duration(asset.duration))
+        } else {
+            parts.append("\(asset.pixelWidth)×\(asset.pixelHeight)")
+        }
+        if let size = library.sizes[asset.localIdentifier] {
+            parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Actions
+
+    private func toggleFavorite() async {
+        guard let asset = current else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await library.setFavorite(asset, !asset.isFavorite)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteCurrent() async {
+        guard let asset = current,
+              let index = library.assets.firstIndex(of: asset) else { return }
+        // Land on the next item, or the previous one when deleting the last.
+        let ids = library.assets.map(\.localIdentifier)
+        let neighbor = index + 1 < ids.count ? ids[index + 1] : (index > 0 ? ids[index - 1] : nil)
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await library.delete([asset])
+            if let neighbor { position = neighbor } else { dismiss() }
+        } catch let error as PHPhotosError where error.code == .userCancelled {
+            // Declined in the system prompt.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Page
+
+private struct AssetPage: View {
+    let asset: PHAsset
+    let isCurrent: Bool
+    @Binding var isZoomed: Bool
+    let onTap: () -> Void
+
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+    @State private var requestID: PHImageRequestID?
+    @State private var player: AVPlayer?
+    @State private var isPlaying = false
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    private let maxScale: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .scaleEffect(scale)
+                        .offset(offset)
+                } else {
+                    ProgressView().tint(.white)
+                }
+                if asset.mediaType == .video { videoLayer }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                guard asset.mediaType == .image else { return }
+                withAnimation(.spring(duration: 0.3)) {
+                    if scale > 1 { resetZoom() } else { setScale(2.5) }
+                }
+            }
+            .onTapGesture(count: 1, perform: onTap)
+            .gesture(magnify(in: geo.size), including: asset.mediaType == .image ? .all : .subviews)
+            .gesture(pan(in: geo.size), including: scale > 1 ? .all : .subviews)
+            .onAppear { load(size: geo.size) }
+        }
+        .onDisappear(perform: unload)
+        .onChange(of: isCurrent) {
+            if !isCurrent {
+                player?.pause()
+                isPlaying = false
+                resetZoom()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(asset.mediaType == .video ? "วีดีโอ" : "รูปภาพ")
+    }
+
+    // MARK: Video
+
+    @ViewBuilder
+    private var videoLayer: some View {
+        if let player, isPlaying || player.currentTime() > .zero {
+            PlayerLayerView(player: player)
+        }
+        Button { togglePlayback() } label: {
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.title)
+                .foregroundStyle(.white)
+                .frame(width: 72, height: 72)
+                .background(.black.opacity(0.45), in: Circle())
+        }
+        .opacity(isPlaying ? 0 : 1)
+        .accessibilityLabel(isPlaying ? "หยุดชั่วคราว" : "เล่น")
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { note in
+            guard let item = note.object as? AVPlayerItem, item == player?.currentItem else { return }
+            player?.seek(to: .zero)
+            isPlaying = false
+        }
+    }
+
+    private func togglePlayback() {
+        if isPlaying {
+            player?.pause()
+            isPlaying = false
+            return
+        }
+        Task {
+            if player == nil {
+                guard let item = await PhotoLibrary.playerItem(for: asset) else { return }
+                player = AVPlayer(playerItem: item)
+            }
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            player?.play()
+            isPlaying = true
+        }
+    }
+
+    // MARK: Zoom
+
+    private func magnify(in size: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                setScale(lastScale * value.magnification, in: size)
+            }
+            .onEnded { _ in
+                if scale < 1.05 {
+                    withAnimation(.spring(duration: 0.3)) { resetZoom() }
+                } else {
+                    lastScale = scale
+                }
+            }
+    }
+
+    private func pan(in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                offset = clamped(
+                    CGSize(width: lastOffset.width + value.translation.width,
+                           height: lastOffset.height + value.translation.height),
+                    in: size
+                )
+            }
+            .onEnded { _ in lastOffset = offset }
+    }
+
+    private func setScale(_ value: CGFloat, in size: CGSize? = nil) {
+        scale = min(max(value, 1), maxScale)
+        lastScale = scale
+        if let size { offset = clamped(offset, in: size) }
+        isZoomed = scale > 1
+    }
+
+    private func resetZoom() {
+        scale = 1
+        lastScale = 1
+        offset = .zero
+        lastOffset = .zero
+        if isCurrent { isZoomed = false }
+    }
+
+    /// Keeps the zoomed image from being dragged past its edges.
+    private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        let maxX = size.width * (scale - 1) / 2
+        let maxY = size.height * (scale - 1) / 2
+        return CGSize(width: min(max(proposed.width, -maxX), maxX),
+                      height: min(max(proposed.height, -maxY), maxY))
+    }
+
+    // MARK: Loading
+
+    private func load(size: CGSize) {
+        guard image == nil else { return }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.isNetworkAccessAllowed = true
+        // 2x the screen so zooming in stays sharp without loading full resolution.
+        let target = CGSize(width: size.width * displayScale * 2, height: size.height * displayScale * 2)
+        requestID = PHImageManager.default().requestImage(
+            for: asset, targetSize: target, contentMode: .aspectFit, options: options
+        ) { result, _ in
+            if let result { image = result }
+        }
+    }
+
+    private func unload() {
+        if let requestID { PHImageManager.default().cancelImageRequest(requestID) }
+        requestID = nil
+        image = nil
+        player?.pause()
+        player = nil
+        isPlaying = false
+    }
+}
+
+private struct PlayerLayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> PlayerUIView {
+        let view = PlayerUIView()
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = player
+        return view
+    }
+
+    func updateUIView(_ view: PlayerUIView, context: Context) {
+        view.playerLayer.player = player
+    }
+
+    final class PlayerUIView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+}

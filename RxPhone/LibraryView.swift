@@ -9,6 +9,9 @@ struct LibraryView: View {
     @State private var isDeleting = false
     @State private var toast: String?
     @State private var errorMessage: String?
+    @State private var viewer: ViewerTarget?
+
+    private struct ViewerTarget: Identifiable { let id: String }
 
     private let columns = [GridItem(.adaptive(minimum: 100), spacing: 2)]
 
@@ -19,6 +22,9 @@ struct LibraryView: View {
                 .toolbar { toolbar }
         }
         .task { await library.start() }
+        .fullScreenCover(item: $viewer) { target in
+            AssetViewer(library: library, startID: target.id)
+        }
         .alert("ลบไม่สำเร็จ", isPresented: .constant(errorMessage != nil)) {
             Button("ตกลง") { errorMessage = nil }
         } message: {
@@ -95,8 +101,13 @@ struct LibraryView: View {
         let selected = selection.contains(id)
         let size = library.sortOrder == .largest ? library.sizes[id].map(Self.format) : nil
         return Button {
-            if !isSelecting { isSelecting = true }
-            if selected { selection.remove(id) } else { selection.insert(id) }
+            if !isSelecting {
+                viewer = ViewerTarget(id: id)
+            } else if selected {
+                selection.remove(id)
+            } else {
+                selection.insert(id)
+            }
         } label: {
             AssetThumbnail(
                 asset: asset,
@@ -109,7 +120,7 @@ struct LibraryView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Self.accessibilityLabel(for: asset))
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityHint(isSelecting ? "แตะเพื่อเลือกหรือยกเลิก" : "แตะเพื่อเริ่มเลือก")
+        .accessibilityHint(isSelecting ? "แตะเพื่อเลือกหรือยกเลิก" : "แตะเพื่อดูเต็มจอ")
     }
 
     private var limitedBanner: some View {

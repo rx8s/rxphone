@@ -1,3 +1,4 @@
+import AVFoundation
 import Observation
 import Photos
 
@@ -89,6 +90,26 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
 
     nonisolated private static func deleteRequest(_ targets: [PHAsset]) -> @Sendable () -> Void {
         { PHAssetChangeRequest.deleteAssets(targets as NSArray) }
+    }
+
+    func setFavorite(_ asset: PHAsset, _ isFavorite: Bool) async throws {
+        try await PHPhotoLibrary.shared().performChanges(Self.favoriteRequest(asset, isFavorite))
+    }
+
+    nonisolated private static func favoriteRequest(_ asset: PHAsset, _ isFavorite: Bool) -> @Sendable () -> Void {
+        { PHAssetChangeRequest(for: asset).isFavorite = isFavorite }
+    }
+
+    /// PhotoKit calls this handler on an arbitrary queue, so it stays nonisolated.
+    nonisolated static func playerItem(for asset: PHAsset) async -> AVPlayerItem? {
+        await withCheckedContinuation { continuation in
+            let options = PHVideoRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .automatic
+            PHImageManager.default().requestPlayerItem(forVideo: asset, options: options) { item, _ in
+                continuation.resume(returning: item)
+            }
+        }
     }
 
     /// Sum of the asset's resources (original + edits). PhotoKit has no public
