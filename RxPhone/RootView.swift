@@ -36,6 +36,7 @@ private struct PermissionView: View {
             } actions: {
                 Button("อนุญาตการเข้าถึง") { Task { await library.requestAccess() } }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Color(.systemBackground))
             }
         } else {
             ContentUnavailableView {
@@ -49,6 +50,9 @@ private struct PermissionView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                // The accent is near-white in dark mode; the default white
+                // label would vanish on it.
+                .foregroundStyle(Color(.systemBackground))
             }
         }
     }

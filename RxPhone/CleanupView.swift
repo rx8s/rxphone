@@ -84,7 +84,7 @@ struct CleanupView: View {
             HStack(spacing: 14) {
                 Image(systemName: category.systemImage)
                     .font(.title3)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(.systemBackground))
                     .frame(width: 44, height: 44)
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 2) {

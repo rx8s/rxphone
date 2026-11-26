@@ -43,7 +43,10 @@ struct AssetThumbnail: View {
         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
             .font(.title3)
             .symbolRenderingMode(.palette)
-            .foregroundStyle(.white, isSelected ? Color.accentColor : .clear)
+            // The accent flips between near-black and near-white with the color
+            // scheme, so the tick uses the background color to stay visible on it.
+            .foregroundStyle(isSelected ? Color(.systemBackground) : .white,
+                             isSelected ? Color.accentColor : .clear)
             .shadow(color: .black.opacity(0.4), radius: 2)
             .padding(6)
     }

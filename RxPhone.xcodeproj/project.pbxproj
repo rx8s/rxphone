@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0BC1640F54BAD5D7A24ACAF5 /* CleanupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3505332F685889FB397B802 /* CleanupView.swift */; };
+		40964DB885816664C7410D9F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D1923246F7938D200C61D1DE /* Assets.xcassets */; };
 		A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */; };
 		AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */; };
 		B379C5E9F1B376723E1D402D /* CleanupScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E0E1C082AB9740D7A44F92 /* CleanupScanner.swift */; };
@@ -27,6 +28,7 @@
 		ABB8A3F08208A78341802D3D /* AssetViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetViewer.swift; sourceTree = "<group>"; };
 		B9743964006EF9AD887A909C /* HorizontalPan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalPan.swift; sourceTree = "<group>"; };
 		C3505332F685889FB397B802 /* CleanupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupView.swift; sourceTree = "<group>"; };
+		D1923246F7938D200C61D1DE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F3E0E1C082AB9740D7A44F92 /* CleanupScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScanner.swift; sourceTree = "<group>"; };
 		F4A375C669459BB71F384479 /* RxPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RxPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -35,6 +37,7 @@
 		13DD32622184ACA53AF1D618 /* RxPhone */ = {
 			isa = PBXGroup;
 			children = (
+				D1923246F7938D200C61D1DE /* Assets.xcassets */,
 				6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */,
 				ABB8A3F08208A78341802D3D /* AssetViewer.swift */,
 				F3E0E1C082AB9740D7A44F92 /* CleanupScanner.swift */,
@@ -72,6 +75,7 @@
 			buildConfigurationList = 4D819E2E995174220CF78051 /* Build configuration list for PBXNativeTarget "RxPhone" */;
 			buildPhases = (
 				E36AE4582CE0F3EAB2F0CFDB /* Sources */,
+				16BA9EB13E71554DCAA5F96E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -114,6 +118,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		16BA9EB13E71554DCAA5F96E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				40964DB885816664C7410D9F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		E36AE4582CE0F3EAB2F0CFDB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -137,7 +152,8 @@
 		061E6C7DD38E1ABDD0CB61F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -280,7 +296,8 @@
 		BEFB09E0C757F99C3548F2FE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
