@@ -98,44 +98,32 @@ final class CleanupScanner {
             .values.filter { $0.count > 1 }.flatMap { $0 }
         state = .scanning(done: 0, total: candidates.count)
 
-        var buckets: [String: [(asset: PHAsset, pixels: [UInt8])]] = [:]
+        var fingerprinted: [(asset: PHAsset, print: DuplicateMatcher.Fingerprint)] = []
         var index = 0
         let chunkSize = 16
         while index < candidates.count {
             let chunk = Array(candidates[index..<min(index + chunkSize, candidates.count)])
             let prints = await Task.detached(priority: .userInitiated) {
-                await withTaskGroup(of: (Int, Fingerprint?).self) { group in
+                await withTaskGroup(of: (Int, DuplicateMatcher.Fingerprint?).self) { group in
                     for (i, asset) in chunk.enumerated() {
                         group.addTask { (i, Self.fingerprint(of: asset)) }
                     }
-                    var out = [Fingerprint?](repeating: nil, count: chunk.count)
+                    var out = [DuplicateMatcher.Fingerprint?](repeating: nil, count: chunk.count)
                     for await (i, print) in group { out[i] = print }
                     return out
                 }
             }.value
             for (asset, print) in zip(chunk, prints) {
-                guard let print else { continue }
-                buckets["\(asset.pixelWidth)x\(asset.pixelHeight)|\(print.hash)", default: []]
-                    .append((asset, print.pixels))
+                if let print { fingerprinted.append((asset, print)) }
             }
             index += chunk.count
             state = .scanning(done: index, total: candidates.count)
         }
 
-        // A matching hash only means "looks alike at 16×16". Confirm pixel by
-        // pixel so photos that differ in small details are not grouped.
-        var groups: [[PHAsset]] = []
-        for bucket in buckets.values where bucket.count > 1 {
-            var clusters: [[(asset: PHAsset, pixels: [UInt8])]] = []
-            for item in bucket {
-                if let i = clusters.firstIndex(where: { Self.isSameImage($0[0].pixels, item.pixels) }) {
-                    clusters[i].append(item)
-                } else {
-                    clusters.append([item])
-                }
-            }
-            groups += clusters.filter { $0.count > 1 }.map { $0.map(\.asset) }
-        }
+        let groups = DuplicateMatcher.groups(fingerprinted.enumerated().map {
+            (id: $0.offset, width: $0.element.asset.pixelWidth,
+             height: $0.element.asset.pixelHeight, print: $0.element.print)
+        }).map { $0.map { fingerprinted[$0].asset } }
 
         return groups.map { group in
             // Keep a favorite if there is one, otherwise the oldest copy.
@@ -150,66 +138,20 @@ final class CleanupScanner {
         group.dropFirst().reduce(0) { $0 + (library.sizes[$1.localIdentifier] ?? 0) }
     }
 
-    private struct Fingerprint {
-        /// 256-bit difference hash, used to bucket candidates cheaply.
-        let hash: String
-        /// 64×64 grayscale pixels, used to confirm a match.
-        let pixels: [UInt8]
-    }
-
-    private static let compareSide = 64
-
-    /// Same image if almost no pixel differs noticeably: tolerates re-encoding
-    /// noise, rejects any real change (≤ 4 of 4096 pixels may differ by > 32).
-    nonisolated private static func isSameImage(_ a: [UInt8], _ b: [UInt8]) -> Bool {
-        var differing = 0
-        for i in a.indices where abs(Int(a[i]) - Int(b[i])) > 32 {
-            differing += 1
-            if differing > 4 { return false }
-        }
-        return true
-    }
-
-    nonisolated private static func grayscale(_ image: CGImage, width: Int, height: Int) -> [UInt8]? {
-        var pixels = [UInt8](repeating: 0, count: width * height)
-        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
-            guard let context = CGContext(
-                data: buffer.baseAddress, width: width, height: height,
-                bitsPerComponent: 8, bytesPerRow: width,
-                space: CGColorSpaceCreateDeviceGray(),
-                bitmapInfo: CGImageAlphaInfo.none.rawValue
-            ) else { return false }
-            context.interpolationQuality = .medium
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return true
-        }
-        return drawn ? pixels : nil
-    }
-
-    nonisolated private static func fingerprint(of asset: PHAsset) -> Fingerprint? {
+    /// Loads a small thumbnail from PhotoKit and fingerprints it.
+    nonisolated private static func fingerprint(of asset: PHAsset) -> DuplicateMatcher.Fingerprint? {
         let options = PHImageRequestOptions()
         options.isSynchronous = true
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
         var image: UIImage?
-        let side = CGFloat(compareSide)
+        let side = CGFloat(DuplicateMatcher.compareSide)
         PHImageManager.default().requestImage(
             for: asset, targetSize: CGSize(width: side, height: side),
             contentMode: .aspectFit, options: options
         ) { result, _ in image = result }
-        guard let cgImage = image?.cgImage,
-              let small = grayscale(cgImage, width: 17, height: 16),
-              let large = grayscale(cgImage, width: compareSide, height: compareSide)
-        else { return nil }
-
-        var bits = [UInt64](repeating: 0, count: 4)
-        for y in 0..<16 {
-            for x in 0..<16 where small[y * 17 + x] < small[y * 17 + x + 1] {
-                let bit = y * 16 + x
-                bits[bit / 64] |= 1 << UInt64(bit % 64)
-            }
-        }
-        return Fingerprint(hash: bits.map { String($0, radix: 16) }.joined(separator: "-"), pixels: large)
+        guard let cgImage = image?.cgImage else { return nil }
+        return DuplicateMatcher.fingerprint(of: cgImage)
     }
 }
