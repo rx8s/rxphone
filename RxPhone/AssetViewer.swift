@@ -18,7 +18,7 @@ struct AssetViewer: View {
     @State private var dragAxis: Axis?
 
     /// 0 at rest, 1 when dragged far enough to be fully faded.
-    private var dragProgress: CGFloat { min(dragOffset / 400, 1) }
+    private var dragProgress: CGFloat { ViewerMath.dismissProgress(offset: dragOffset) }
 
     init(library: PhotoLibrary, startID: String) {
         self.library = library
@@ -93,7 +93,8 @@ struct AssetViewer: View {
             .onEnded { value in
                 defer { dragAxis = nil }
                 guard dragAxis == .vertical else { return }
-                if value.translation.height > 120 || value.predictedEndTranslation.height > 400 {
+                if ViewerMath.shouldDismiss(translationY: value.translation.height,
+                                            predictedY: value.predictedEndTranslation.height) {
                     dismiss()
                 } else {
                     withAnimation(.spring(duration: 0.3)) { dragOffset = 0 }
@@ -195,8 +196,7 @@ struct AssetViewer: View {
         guard let asset = current,
               let index = library.assets.firstIndex(of: asset) else { return }
         // Land on the next item, or the previous one when deleting the last.
-        let ids = library.assets.map(\.localIdentifier)
-        let neighbor = index + 1 < ids.count ? ids[index + 1] : (index > 0 ? ids[index - 1] : nil)
+        let neighbor = ViewerMath.neighbor(afterDeleting: index, in: library.assets.map(\.localIdentifier))
         isWorking = true
         defer { isWorking = false }
         do {
@@ -354,10 +354,7 @@ private struct AssetPage: View {
 
     /// Keeps the zoomed image from being dragged past its edges.
     private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
-        let maxX = size.width * (scale - 1) / 2
-        let maxY = size.height * (scale - 1) / 2
-        return CGSize(width: min(max(proposed.width, -maxX), maxX),
-                      height: min(max(proposed.height, -maxY), maxY))
+        ViewerMath.clampedOffset(proposed, viewSize: size, scale: scale)
     }
 
     // MARK: Loading

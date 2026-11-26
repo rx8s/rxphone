@@ -74,9 +74,7 @@ struct AssetThumbnail: View {
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
-        let (h, m, s) = (total / 3600, total % 3600 / 60, total % 60)
-        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+        ViewerMath.durationText(seconds)
     }
 }
 

@@ -185,9 +185,10 @@ struct LibraryView: View {
         guard let drag = dragSelect,
               let finger = fingerLocation,
               let current = index(at: finger) else { return }
-        let range = min(drag.startIndex, current)...max(drag.startIndex, current)
-        let ids = Set(library.assets[range].map(\.localIdentifier))
-        let updated = drag.adding ? drag.base.union(ids) : drag.base.subtracting(ids)
+        let updated = GridSelection.select(
+            ids: library.assets.map(\.localIdentifier),
+            from: drag.startIndex, to: current, adding: drag.adding, base: drag.base
+        )
         if updated != selection { selection = updated }
     }
 
@@ -203,12 +204,10 @@ struct LibraryView: View {
                 // reported frame already starts there), above the selection bar.
                 let visibleTop = scrollFrame.minY
                 let visibleBottom = selectionBarTop ?? scrollFrame.maxY
-                var step: CGFloat = 0
-                if finger.y < visibleTop + edge {
-                    step = -Self.autoScrollMaxStep * min((visibleTop + edge - finger.y) / edge, 1)
-                } else if finger.y > visibleBottom - edge {
-                    step = Self.autoScrollMaxStep * min((finger.y - (visibleBottom - edge)) / edge, 1)
-                }
+                let step = GridSelection.autoScrollStep(
+                    fingerY: finger.y, visibleTop: visibleTop, visibleBottom: visibleBottom,
+                    edge: edge, maxStep: Self.autoScrollMaxStep
+                )
                 let target = min(max(m.offset + step, -m.insetTop), m.maxOffset)
                 // scrollTo(y:) takes a point in content coordinates (0 = top of
                 // content), while contentOffset includes the top inset.
@@ -223,16 +222,8 @@ struct LibraryView: View {
     /// column math as `GridItem.adaptive`. Points above or below the grid clamp
     /// to the first or last row.
     private func index(at viewportPoint: CGPoint) -> Int? {
-        let width = gridFrame.width
-        guard width > 0, !library.assets.isEmpty else { return nil }
-        let x = viewportPoint.x - gridFrame.minX
-        let y = max(viewportPoint.y - gridFrame.minY, 0)
-        let spacing = Self.cellSpacing
-        let columnCount = max(Int((width + spacing) / (Self.cellMinSize + spacing)), 1)
-        let cellSize = (width - CGFloat(columnCount - 1) * spacing) / CGFloat(columnCount)
-        let column = min(max(Int(x / (cellSize + spacing)), 0), columnCount - 1)
-        let row = Int(y / (cellSize + spacing))
-        return min(row * columnCount + column, library.assets.count - 1)
+        GridSelection.index(at: viewportPoint, gridFrame: gridFrame, itemCount: library.assets.count,
+                            minCellSize: Self.cellMinSize, spacing: Self.cellSpacing)
     }
 
     private var limitedBanner: some View {

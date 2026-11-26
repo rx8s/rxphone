@@ -239,7 +239,7 @@ struct CleanupDetailView: View {
             return
         }
         if category == .duplicates,
-           section.allSatisfy({ $0.localIdentifier == id || selection.contains($0.localIdentifier) }) {
+           !CleanupRules.canSelect(id, in: section.map(\.localIdentifier), selection: selection) {
             warnTrigger += 1
             show("ต้องเก็บไว้อย่างน้อย 1 รูปในแต่ละกลุ่ม")
             return

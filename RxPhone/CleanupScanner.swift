@@ -40,8 +40,6 @@ final class CleanupScanner {
         case finished
     }
 
-    static let largeVideoBytes: Int64 = 20_000_000
-
     private(set) var state: State = .idle
     /// Each group holds identical photos; the first one is the one to keep.
     private(set) var duplicateGroups: [[PHAsset]] = []
@@ -71,7 +69,7 @@ final class CleanupScanner {
         await library.measure(shots + videos)
         screenshots = shots.sorted { ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast) }
         largeVideos = videos
-            .filter { (library.sizes[$0.localIdentifier] ?? 0) >= Self.largeVideoBytes }
+            .filter { CleanupRules.isLargeVideo(bytes: library.sizes[$0.localIdentifier] ?? 0) }
             .sorted { (library.sizes[$0.localIdentifier] ?? 0) > (library.sizes[$1.localIdentifier] ?? 0) }
 
         duplicateGroups = await findDuplicates(in: all.filter { $0.mediaType == .image })
@@ -82,9 +80,7 @@ final class CleanupScanner {
 
     /// Drops deleted assets from the results.
     func remove(_ ids: Set<String>) {
-        duplicateGroups = duplicateGroups
-            .map { $0.filter { !ids.contains($0.localIdentifier) } }
-            .filter { $0.count > 1 }
+        duplicateGroups = CleanupRules.prune(duplicateGroups) { ids.contains($0.localIdentifier) }
         largeVideos.removeAll { ids.contains($0.localIdentifier) }
         screenshots.removeAll { ids.contains($0.localIdentifier) }
     }
@@ -126,16 +122,12 @@ final class CleanupScanner {
         }).map { $0.map { fingerprinted[$0].asset } }
 
         return groups.map { group in
-            // Keep a favorite if there is one, otherwise the oldest copy.
-            group.sorted {
-                if $0.isFavorite != $1.isFavorite { return $0.isFavorite }
-                return ($0.creationDate ?? .distantFuture) < ($1.creationDate ?? .distantFuture)
-            }
+            CleanupRules.keepFirst(group, isFavorite: \.isFavorite, created: \.creationDate)
         }
     }
 
     private func wasted(_ group: [PHAsset], _ library: PhotoLibrary) -> Int64 {
-        group.dropFirst().reduce(0) { $0 + (library.sizes[$1.localIdentifier] ?? 0) }
+        CleanupRules.wastedBytes(group) { library.sizes[$0.localIdentifier] ?? 0 }
     }
 
     /// Loads a small thumbnail from PhotoKit and fingerprints it.
