@@ -4,7 +4,7 @@ import SwiftUI
 struct RxPhoneApp: App {
     var body: some Scene {
         WindowGroup {
-            LibraryView()
+            RootView()
         }
     }
 }

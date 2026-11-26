@@ -3,7 +3,7 @@ import PhotosUI
 import SwiftUI
 
 struct LibraryView: View {
-    @State private var library = PhotoLibrary()
+    @Bindable var library: PhotoLibrary
     @State private var isSelecting = false
     @State private var selection: Set<String> = []
     @State private var isDeleting = false
@@ -51,11 +51,10 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationStack {
-            content
+            grid
                 .navigationTitle("คลัง")
                 .toolbar { toolbar }
         }
-        .task { await library.start() }
         .fullScreenCover(item: $viewer) { target in
             AssetViewer(library: library, startID: target.id)
                 // Lets the grid show through while swiping down to close.
@@ -69,36 +68,6 @@ struct LibraryView: View {
     }
 
     // MARK: - Content
-
-    @ViewBuilder
-    private var content: some View {
-        switch library.status {
-        case .notDetermined:
-            ContentUnavailableView {
-                Label("เข้าถึงคลังรูปภาพ", systemImage: "photo.on.rectangle")
-            } description: {
-                Text("RxPhone ต้องใช้สิทธิ์เข้าถึงคลังรูปภาพเพื่อแสดงและจัดการรูปกับวีดีโอของคุณ")
-            } actions: {
-                Button("อนุญาตการเข้าถึง") { Task { await library.requestAccess() } }
-                    .buttonStyle(.borderedProminent)
-            }
-        case .denied, .restricted:
-            ContentUnavailableView {
-                Label("ไม่มีสิทธิ์เข้าถึงรูปภาพ", systemImage: "lock")
-            } description: {
-                Text("เปิดสิทธิ์ได้ที่ การตั้งค่า > RxPhone > รูปภาพ")
-            } actions: {
-                Button("เปิดการตั้งค่า") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        default:
-            grid
-        }
-    }
 
     private var grid: some View {
         ScrollView {
@@ -392,7 +361,7 @@ struct LibraryView: View {
     }
 }
 
-private struct ToastView: View {
+struct ToastView: View {
     let text: String
 
     var body: some View {
