@@ -15,17 +15,35 @@ struct LibraryView: View {
 
     /// State of a finger dragging across the grid in selection mode.
     private struct DragSelect {
-        /// False when the drag started vertically: it belongs to scrolling.
-        let isActive: Bool
-        var startIndex = 0
+        let startIndex: Int
         /// Select or deselect, decided by the cell the drag started on.
-        var adding = true
+        let adding: Bool
         /// Selection before the drag, so cells that leave the range revert.
-        var base: Set<String> = []
+        let base: Set<String>
+    }
+
+    /// What auto-scroll needs to know about the ScrollView, in points.
+    private struct ScrollMetrics: Equatable {
+        /// Content offset; `-insetTop` when scrolled to the very top.
+        var offset: CGFloat = 0
+        var insetTop: CGFloat = 0
+        var maxOffset: CGFloat = 0
     }
 
     @State private var dragSelect: DragSelect?
-    @State private var gridWidth: CGFloat = 0
+    /// Finger position in screen coordinates while drag-selecting.
+    @State private var fingerLocation: CGPoint?
+    /// Grid frame in screen coordinates; moves as the content scrolls.
+    @State private var gridFrame: CGRect = .zero
+    /// ScrollView frame and the selection bar's top edge, in screen coordinates.
+    @State private var scrollFrame: CGRect = .zero
+    @State private var selectionBarTop: CGFloat?
+    @State private var scrollPosition = ScrollPosition()
+    @State private var scrollMetrics = ScrollMetrics()
+    /// Distance from the top/bottom edge where auto-scroll kicks in.
+    private static let autoScrollEdge: CGFloat = 80
+    /// Fastest auto-scroll speed, reached at the very edge (points per frame).
+    private static let autoScrollMaxStep: CGFloat = 18
 
     private static let cellMinSize: CGFloat = 100
     private static let cellSpacing: CGFloat = 2
@@ -90,11 +108,26 @@ struct LibraryView: View {
                     cell(for: asset)
                 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
-            .simultaneousGesture(dragSelectGesture, including: isSelecting ? .all : .subviews)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { gridFrame = $0 }
+            .gesture(HorizontalPan(isEnabled: isSelecting, action: handleDragSelect))
         }
-        .scrollDisabled(dragSelect?.isActive == true)
-        .sensoryFeedback(.selection, trigger: selection.count) { _, _ in dragSelect?.isActive == true }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
+            ScrollMetrics(
+                offset: geo.contentOffset.y,
+                insetTop: geo.contentInsets.top,
+                maxOffset: max(
+                    geo.contentSize.height - geo.containerSize.height + geo.contentInsets.bottom,
+                    -geo.contentInsets.top
+                )
+            )
+        } action: { _, metrics in
+            scrollMetrics = metrics
+        }
+        .scrollDisabled(dragSelect != nil)
+        .task(id: dragSelect != nil) { await autoScroll() }
+        .sensoryFeedback(.selection, trigger: selection.count) { _, _ in dragSelect != nil }
         .overlay {
             if library.isLoaded && library.assets.isEmpty {
                 ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
@@ -111,7 +144,13 @@ struct LibraryView: View {
             if let toast { ToastView(text: toast) }
         }
         .safeAreaInset(edge: .bottom) {
-            if isSelecting { selectionBar }
+            if isSelecting {
+                selectionBar
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: {
+                        selectionBarTop = $0
+                    }
+                    .onDisappear { selectionBarTop = nil }
+            }
         }
         .task(id: selection) {
             await library.measure(selectedAssets)
@@ -149,43 +188,81 @@ struct LibraryView: View {
     }
 
     /// Drag sideways across cells to select (or deselect) a range, like Photos.
-    /// A drag that starts vertically is left to the ScrollView.
-    private var dragSelectGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                if dragSelect == nil {
-                    let t = value.translation
-                    guard abs(t.width) > abs(t.height),
-                          let start = index(at: value.startLocation) else {
-                        dragSelect = DragSelect(isActive: false)
-                        return
-                    }
-                    let id = library.assets[start].localIdentifier
-                    dragSelect = DragSelect(
-                        isActive: true,
-                        startIndex: start,
-                        adding: !selection.contains(id),
-                        base: selection
-                    )
-                }
-                guard let drag = dragSelect, drag.isActive,
-                      let current = index(at: value.location) else { return }
-                let range = min(drag.startIndex, current)...max(drag.startIndex, current)
-                let ids = Set(library.assets[range].map(\.localIdentifier))
-                selection = drag.adding ? drag.base.union(ids) : drag.base.subtracting(ids)
-            }
-            .onEnded { _ in dragSelect = nil }
+    /// `HorizontalPan` only begins on sideways movement, so vertical drags scroll.
+    /// Points are in screen coordinates: the finger stays put while auto-scroll
+    /// moves the content under it, so the cell is recomputed from `gridFrame`.
+    private func handleDragSelect(_ phase: HorizontalPan.Phase) {
+        switch phase {
+        case let .began(start, location):
+            guard let startIndex = index(at: start) else { return }
+            let id = library.assets[startIndex].localIdentifier
+            dragSelect = DragSelect(
+                startIndex: startIndex,
+                adding: !selection.contains(id),
+                base: selection
+            )
+            fingerLocation = location
+            updateDragSelection()
+        case let .changed(location):
+            fingerLocation = location
+            updateDragSelection()
+        case .ended:
+            dragSelect = nil
+            fingerLocation = nil
+        }
     }
 
-    /// Maps a point in the grid's own coordinates to an asset index, using the
-    /// same column math as `GridItem.adaptive`.
-    private func index(at point: CGPoint) -> Int? {
-        guard gridWidth > 0, !library.assets.isEmpty, point.y >= 0 else { return nil }
+    private func updateDragSelection() {
+        guard let drag = dragSelect,
+              let finger = fingerLocation,
+              let current = index(at: finger) else { return }
+        let range = min(drag.startIndex, current)...max(drag.startIndex, current)
+        let ids = Set(library.assets[range].map(\.localIdentifier))
+        let updated = drag.adding ? drag.base.union(ids) : drag.base.subtracting(ids)
+        if updated != selection { selection = updated }
+    }
+
+    /// While drag-selecting, scrolls when the finger is near the top or bottom
+    /// edge, faster the closer it gets, and extends the selection as rows pass.
+    private func autoScroll() async {
+        guard dragSelect != nil else { return }
+        let edge = Self.autoScrollEdge
+        while !Task.isCancelled {
+            if let finger = fingerLocation {
+                let m = scrollMetrics
+                // Visible band on screen: below the nav bar (the ScrollView's
+                // reported frame already starts there), above the selection bar.
+                let visibleTop = scrollFrame.minY
+                let visibleBottom = selectionBarTop ?? scrollFrame.maxY
+                var step: CGFloat = 0
+                if finger.y < visibleTop + edge {
+                    step = -Self.autoScrollMaxStep * min((visibleTop + edge - finger.y) / edge, 1)
+                } else if finger.y > visibleBottom - edge {
+                    step = Self.autoScrollMaxStep * min((finger.y - (visibleBottom - edge)) / edge, 1)
+                }
+                let target = min(max(m.offset + step, -m.insetTop), m.maxOffset)
+                // scrollTo(y:) takes a point in content coordinates (0 = top of
+                // content), while contentOffset includes the top inset.
+                if target != m.offset { scrollPosition.scrollTo(y: target + m.insetTop) }
+                updateDragSelection()
+            }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+    }
+
+    /// Maps a point in viewport coordinates to an asset index, using the same
+    /// column math as `GridItem.adaptive`. Points above or below the grid clamp
+    /// to the first or last row.
+    private func index(at viewportPoint: CGPoint) -> Int? {
+        let width = gridFrame.width
+        guard width > 0, !library.assets.isEmpty else { return nil }
+        let x = viewportPoint.x - gridFrame.minX
+        let y = max(viewportPoint.y - gridFrame.minY, 0)
         let spacing = Self.cellSpacing
-        let columnCount = max(Int((gridWidth + spacing) / (Self.cellMinSize + spacing)), 1)
-        let cellSize = (gridWidth - CGFloat(columnCount - 1) * spacing) / CGFloat(columnCount)
-        let column = min(max(Int(point.x / (cellSize + spacing)), 0), columnCount - 1)
-        let row = Int(point.y / (cellSize + spacing))
+        let columnCount = max(Int((width + spacing) / (Self.cellMinSize + spacing)), 1)
+        let cellSize = (width - CGFloat(columnCount - 1) * spacing) / CGFloat(columnCount)
+        let column = min(max(Int(x / (cellSize + spacing)), 0), columnCount - 1)
+        let row = Int(y / (cellSize + spacing))
         return min(row * columnCount + column, library.assets.count - 1)
     }
 

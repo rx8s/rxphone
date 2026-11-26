@@ -10,6 +10,7 @@
 		A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */; };
 		AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */; };
 		C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BF1D87814390AC4ED5A511 /* LibraryView.swift */; };
+		E17B3BB11929A747D161D006 /* HorizontalPan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9743964006EF9AD887A909C /* HorizontalPan.swift */; };
 		EB1372980F72CF8C842DC2FD /* AssetViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABB8A3F08208A78341802D3D /* AssetViewer.swift */; };
 		FA5136BADE60DABB42EA8B05 /* RxPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */; };
 /* End PBXBuildFile section */
@@ -20,6 +21,7 @@
 		58BF1D87814390AC4ED5A511 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetThumbnail.swift; sourceTree = "<group>"; };
 		ABB8A3F08208A78341802D3D /* AssetViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetViewer.swift; sourceTree = "<group>"; };
+		B9743964006EF9AD887A909C /* HorizontalPan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalPan.swift; sourceTree = "<group>"; };
 		F4A375C669459BB71F384479 /* RxPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RxPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -29,6 +31,7 @@
 			children = (
 				6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */,
 				ABB8A3F08208A78341802D3D /* AssetViewer.swift */,
+				B9743964006EF9AD887A909C /* HorizontalPan.swift */,
 				58BF1D87814390AC4ED5A511 /* LibraryView.swift */,
 				1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */,
 				3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */,
@@ -109,6 +112,7 @@
 			files = (
 				AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */,
 				EB1372980F72CF8C842DC2FD /* AssetViewer.swift in Sources */,
+				E17B3BB11929A747D161D006 /* HorizontalPan.swift in Sources */,
 				C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */,
 				A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */,
 				FA5136BADE60DABB42EA8B05 /* RxPhoneApp.swift in Sources */,
@@ -191,7 +195,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -249,7 +253,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
