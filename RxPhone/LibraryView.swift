@@ -24,6 +24,8 @@ struct LibraryView: View {
         .task { await library.start() }
         .fullScreenCover(item: $viewer) { target in
             AssetViewer(library: library, startID: target.id)
+                // Lets the grid show through while swiping down to close.
+                .presentationBackground(.clear)
         }
         .alert("ลบไม่สำเร็จ", isPresented: .constant(errorMessage != nil)) {
             Button("ตกลง") { errorMessage = nil }

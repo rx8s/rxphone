@@ -13,6 +13,12 @@ struct AssetViewer: View {
     @State private var isZoomed = false
     @State private var isWorking = false
     @State private var errorMessage: String?
+    /// Vertical distance of an in-progress swipe-down-to-close.
+    @State private var dragOffset: CGFloat = 0
+    @State private var dragAxis: Axis?
+
+    /// 0 at rest, 1 when dragged far enough to be fully faded.
+    private var dragProgress: CGFloat { min(dragOffset / 400, 1) }
 
     init(library: PhotoLibrary, startID: String) {
         self.library = library
@@ -25,11 +31,16 @@ struct AssetViewer: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            pager.ignoresSafeArea()
+            Color.black.opacity(1 - dragProgress).ignoresSafeArea()
+            pager
+                .ignoresSafeArea()
+                .scaleEffect(1 - dragProgress * 0.25)
+                .offset(y: dragOffset)
         }
-        .overlay(alignment: .top) { if showsChrome { topBar.transition(.opacity) } }
-        .overlay(alignment: .bottom) { if showsChrome { bottomBar.transition(.opacity) } }
+        .simultaneousGesture(dismissDrag, including: isZoomed ? .subviews : .all)
+        .accessibilityAction(.escape) { dismiss() }
+        .overlay(alignment: .top) { if showsChrome && dragOffset == 0 { topBar.transition(.opacity) } }
+        .overlay(alignment: .bottom) { if showsChrome && dragOffset == 0 { bottomBar.transition(.opacity) } }
         .statusBarHidden(!showsChrome)
         .preferredColorScheme(.dark)
         .onChange(of: position) { isZoomed = false }
@@ -65,6 +76,29 @@ struct AssetViewer: View {
         .scrollPosition(id: $position)
         .scrollIndicators(.hidden)
         .scrollDisabled(isZoomed)
+    }
+
+    /// Swipe down to close. The axis is locked on the first movement so
+    /// horizontal paging in the ScrollView is left alone.
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                if dragAxis == nil {
+                    let t = value.translation
+                    dragAxis = abs(t.height) > abs(t.width) ? .vertical : .horizontal
+                }
+                guard dragAxis == .vertical else { return }
+                dragOffset = max(value.translation.height, 0)
+            }
+            .onEnded { value in
+                defer { dragAxis = nil }
+                guard dragAxis == .vertical else { return }
+                if value.translation.height > 120 || value.predictedEndTranslation.height > 400 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(duration: 0.3)) { dragOffset = 0 }
+                }
+            }
     }
 
     // MARK: - Chrome
