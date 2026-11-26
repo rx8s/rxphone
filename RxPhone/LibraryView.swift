@@ -1,0 +1,255 @@
+import Photos
+import PhotosUI
+import SwiftUI
+
+struct LibraryView: View {
+    @State private var library = PhotoLibrary()
+    @State private var isSelecting = false
+    @State private var selection: Set<String> = []
+    @State private var isDeleting = false
+    @State private var toast: String?
+    @State private var errorMessage: String?
+
+    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 2)]
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("คลัง")
+                .toolbar { toolbar }
+        }
+        .task { await library.start() }
+        .alert("ลบไม่สำเร็จ", isPresented: .constant(errorMessage != nil)) {
+            Button("ตกลง") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        switch library.status {
+        case .notDetermined:
+            ContentUnavailableView {
+                Label("เข้าถึงคลังรูปภาพ", systemImage: "photo.on.rectangle")
+            } description: {
+                Text("RxPhone ต้องใช้สิทธิ์เข้าถึงคลังรูปภาพเพื่อแสดงและจัดการรูปกับวีดีโอของคุณ")
+            } actions: {
+                Button("อนุญาตการเข้าถึง") { Task { await library.requestAccess() } }
+                    .buttonStyle(.borderedProminent)
+            }
+        case .denied, .restricted:
+            ContentUnavailableView {
+                Label("ไม่มีสิทธิ์เข้าถึงรูปภาพ", systemImage: "lock")
+            } description: {
+                Text("เปิดสิทธิ์ได้ที่ การตั้งค่า > RxPhone > รูปภาพ")
+            } actions: {
+                Button("เปิดการตั้งค่า") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        default:
+            grid
+        }
+    }
+
+    private var grid: some View {
+        ScrollView {
+            if library.status == .limited { limitedBanner }
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(library.assets, id: \.localIdentifier) { asset in
+                    cell(for: asset)
+                }
+            }
+        }
+        .overlay {
+            if library.isLoaded && library.assets.isEmpty {
+                ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
+            }
+        }
+        .overlay {
+            if library.isMeasuring && library.sortOrder == .largest {
+                ProgressView("กำลังคำนวณขนาดไฟล์…")
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .overlay(alignment: .top) {
+            if let toast { ToastView(text: toast) }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if isSelecting { selectionBar }
+        }
+        .task(id: selection) {
+            await library.measure(selectedAssets)
+        }
+    }
+
+    private func cell(for asset: PHAsset) -> some View {
+        let id = asset.localIdentifier
+        let selected = selection.contains(id)
+        let size = library.sortOrder == .largest ? library.sizes[id].map(Self.format) : nil
+        return Button {
+            if !isSelecting { isSelecting = true }
+            if selected { selection.remove(id) } else { selection.insert(id) }
+        } label: {
+            AssetThumbnail(
+                asset: asset,
+                manager: library.imageManager,
+                isSelecting: isSelecting,
+                isSelected: selected,
+                sizeText: size
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Self.accessibilityLabel(for: asset))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(isSelecting ? "แตะเพื่อเลือกหรือยกเลิก" : "แตะเพื่อเริ่มเลือก")
+    }
+
+    private var limitedBanner: some View {
+        HStack {
+            Text("คุณให้สิทธิ์เข้าถึงแค่บางรูป")
+                .font(.subheadline)
+            Spacer()
+            Button("จัดการ") {
+                guard let root = UIApplication.shared.connectedScenes
+                    .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
+                    .first else { return }
+                PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: root)
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Selection
+
+    private var selectedAssets: [PHAsset] {
+        library.assets.filter { selection.contains($0.localIdentifier) }
+    }
+
+    private var selectedSizeText: String {
+        let sizes = selectedAssets.map { library.sizes[$0.localIdentifier] }
+        if sizes.contains(where: { $0 == nil }) { return "กำลังคำนวณขนาด…" }
+        return "รวม " + Self.format(sizes.reduce(0) { $0 + ($1 ?? 0) })
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("เลือก \(selection.count) รายการ").font(.headline)
+                if !selection.isEmpty {
+                    Text(selectedSizeText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button(role: .destructive) {
+                Task { await deleteSelected() }
+            } label: {
+                if isDeleting {
+                    ProgressView()
+                } else {
+                    Label("ลบ", systemImage: "trash")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .controlSize(.large)
+            .disabled(selection.isEmpty || isDeleting)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    private func deleteSelected() async {
+        let targets = selectedAssets
+        let freed = targets.reduce(Int64(0)) { $0 + (library.sizes[$1.localIdentifier] ?? 0) }
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await library.delete(targets)
+            selection.removeAll()
+            isSelecting = false
+            show("ลบ \(targets.count) รายการ (\(Self.format(freed))) กู้คืนได้ในอัลบั้ม \"ลบล่าสุด\" ภายใน 30 วัน")
+        } catch let error as PHPhotosError where error.code == .userCancelled {
+            // User tapped "Don't Allow" in the system prompt; keep the selection.
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func show(_ message: String) {
+        withAnimation { toast = message }
+        UIAccessibility.post(notification: .announcement, argument: message)
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation { if toast == message { toast = nil } }
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        if library.hasAccess {
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Picker("เรียงตาม", selection: $library.sortOrder) {
+                        ForEach(SortOrder.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                } label: {
+                    Label("เรียงตาม", systemImage: "arrow.up.arrow.down")
+                }
+                .disabled(isDeleting)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(isSelecting ? "เสร็จ" : "เลือก") {
+                    isSelecting.toggle()
+                    if !isSelecting { selection.removeAll() }
+                }
+                .disabled(library.assets.isEmpty || isDeleting)
+            }
+        }
+    }
+
+    // MARK: - Formatting
+
+    private static func format(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private static func accessibilityLabel(for asset: PHAsset) -> String {
+        let date = asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? ""
+        if asset.mediaType == .video {
+            return "วีดีโอ \(AssetThumbnail.duration(asset.duration)), \(date)"
+        }
+        return "รูปภาพ, \(date)"
+    }
+}
+
+private struct ToastView: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+            .padding()
+            .transition(.move(edge: .top).combined(with: .opacity))
+    }
+}
