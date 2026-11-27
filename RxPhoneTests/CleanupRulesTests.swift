@@ -81,6 +81,39 @@ struct CleanupRulesTests {
         #expect(CleanupRules.prune(groups) { _ in true }.isEmpty)
     }
 
+    // MARK: - Selection after a rescan
+
+    @Test("A rescan pre-selects copies in new groups and keeps the user's choices")
+    func refreshAddsNewGroups() {
+        // The user deselected a2 earlier; group b is new from the rescan.
+        let groups = [["a1", "a2", "a3"], ["b1", "b2"]]
+        let result = CleanupRules.refreshDuplicateSelection(
+            groups: groups, selection: ["a3"], seen: ["a1", "a2", "a3"]
+        )
+        #expect(result == ["a3", "b2"])
+    }
+
+    @Test("Deleted copies leave the selection")
+    func refreshDropsGone() {
+        let result = CleanupRules.refreshDuplicateSelection(
+            groups: [["a1", "a2"]], selection: ["a2", "gone"], seen: ["a1", "a2", "gone"]
+        )
+        #expect(result == ["a2"])
+    }
+
+    @Test("A group never ends up fully selected")
+    func refreshKeepsOne() {
+        // A new, older copy a0 now leads the group; a1 and a2 were selected.
+        let result = CleanupRules.refreshDuplicateSelection(
+            groups: [["a0", "a1", "a2"]], selection: ["a1", "a2"], seen: ["a1", "a2"]
+        )
+        #expect(result == ["a1", "a2"])
+        let full = CleanupRules.refreshDuplicateSelection(
+            groups: [["a1", "a2"]], selection: ["a1", "a2"], seen: ["a1", "a2"]
+        )
+        #expect(full == ["a2"])
+    }
+
     // MARK: - Library changes after a scan
 
     @Test("Deleted items are reported so they leave the results")

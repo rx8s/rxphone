@@ -60,8 +60,12 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
     private(set) var photoCount = 0
     private(set) var videoCount = 0
 
-    var mediaFilter: MediaFilter = .all {
-        didSet { if mediaFilter != oldValue { applyFilter() } }
+    var mediaFilter: MediaFilter = Preference.load("mediaFilter", default: .all) {
+        didSet {
+            guard mediaFilter != oldValue else { return }
+            Preference.save(mediaFilter, "mediaFilter")
+            applyFilter()
+        }
     }
 
     func count(for filter: MediaFilter) -> Int {
@@ -78,8 +82,11 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
     /// File size in bytes, keyed by `PHAsset.localIdentifier`.
     private(set) var sizes: [String: Int64] = [:]
 
-    var sortOrder: SortOrder = .newest {
-        didSet { Task { await reload() } }
+    var sortOrder: SortOrder = Preference.load("sortOrder", default: .newest) {
+        didSet {
+            Preference.save(sortOrder, "sortOrder")
+            Task { await reload() }
+        }
     }
 
     @ObservationIgnored let imageManager = PHCachingImageManager()

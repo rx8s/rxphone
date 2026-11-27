@@ -13,9 +13,24 @@ final class RxPhoneUITests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication()
+        // Launch arguments override saved choices, so every test starts from
+        // the defaults whatever the previous test left behind.
+        app.launchArguments = Self.defaults
         app.launch()
         grantAccessIfNeeded()
         XCTAssertTrue(firstCell.waitForExistence(timeout: 10), "No photos in the library")
+    }
+
+    private static let defaults = ["-mediaFilter", "all", "-sortOrder", "newest"]
+
+    /// Taps a filter back to ทั้งหมด. The app saves the choice, so tests that
+    /// change it put it back and leave the Simulator as they found it.
+    private func resetFilter() {
+        let all = segment("ทั้งหมด")
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        all.tap()
+        expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: all)
+        waitForExpectations(timeout: 5)
     }
 
     // MARK: - Helpers
@@ -174,6 +189,8 @@ final class RxPhoneUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'page-' AND label == 'รูปภาพ'"))
             .firstMatch.exists)
+        app.buttons["ปิด"].tap()
+        resetFilter()
     }
 
     func testSwitchingFilterDropsHiddenSelection() {
@@ -186,6 +203,25 @@ final class RxPhoneUITests: XCTestCase {
         // and be deleted unseen.
         segment("วีดีโอ").tap()
         XCTAssertEqual(selectionCount.label, "เลือก 0 รายการ")
+        resetFilter()
+    }
+
+    func testFilterAndSortAreRememberedAfterRelaunch() {
+        segment("วีดีโอ").tap()
+        app.navigationBars.buttons["เรียงตาม"].tap()
+        app.buttons["เก่าสุดก่อน"].tap()
+
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(segment("วีดีโอ").waitForExistence(timeout: 10))
+        XCTAssertTrue(segment("วีดีโอ").isSelected, "Filter was not remembered")
+        app.navigationBars.buttons["เรียงตาม"].tap()
+        XCTAssertTrue(app.buttons["เก่าสุดก่อน"].isSelected, "Sort order was not remembered")
+
+        // Leave the saved choices at their defaults.
+        app.buttons["ใหม่สุดก่อน"].tap()
+        resetFilter()
     }
 
     // MARK: - Viewer

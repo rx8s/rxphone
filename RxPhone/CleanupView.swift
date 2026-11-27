@@ -151,6 +151,8 @@ struct CleanupDetailView: View {
 
     @State private var selection: Set<String> = []
     @State private var didPreselect = false
+    /// Duplicate copies shown so far; copies outside it are new from a rescan.
+    @State private var seenDuplicates: Set<String> = []
     @State private var isDeleting = false
     @State private var toast: String?
     @State private var errorMessage: String?
@@ -208,8 +210,16 @@ struct CleanupDetailView: View {
         .sensoryFeedback(.warning, trigger: warnTrigger)
         .onAppear(perform: preselect)
         .onChange(of: flatAssets.map(\.localIdentifier)) { _, ids in
-            // Items deleted elsewhere must not stay selected.
-            selection.formIntersection(ids)
+            guard category == .duplicates else {
+                // Items deleted elsewhere must not stay selected.
+                selection.formIntersection(ids)
+                return
+            }
+            let groups = scanner.duplicateGroups.map { $0.map(\.localIdentifier) }
+            selection = CleanupRules.refreshDuplicateSelection(
+                groups: groups, selection: selection, seen: seenDuplicates
+            )
+            seenDuplicates.formUnion(ids)
         }
         .alert("ลบไม่สำเร็จ", isPresented: Binding(
             get: { errorMessage != nil },
@@ -273,6 +283,7 @@ struct CleanupDetailView: View {
         didPreselect = true
         if category == .duplicates {
             selection = Set(scanner.assets(in: .duplicates).map(\.localIdentifier))
+            seenDuplicates = Set(flatAssets.map(\.localIdentifier))
         }
     }
 

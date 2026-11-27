@@ -14,6 +14,7 @@
 		40964DB885816664C7410D9F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D1923246F7938D200C61D1DE /* Assets.xcassets */; };
 		464E46FAC7FB750C4BA4A65E /* CleanupRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF91BA24DD661D72A2AEA41 /* CleanupRules.swift */; };
 		5CA250FD54B29D9174A78D94 /* DuplicateMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1565864535F6172F6140B81 /* DuplicateMatcher.swift */; };
+		7C2DB1B65974ECFA59890987 /* Preference.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4D3DDA89E43FE9FAC6E1CDE /* Preference.swift */; };
 		849975C4E510A3395CE9CE49 /* MediaFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0ED4E008B40D0CF122244C /* MediaFilterTests.swift */; };
 		A193582305937FBE8949C412 /* GridSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAD670F01918D5F0AB9288E /* GridSelection.swift */; };
 		A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */; };
@@ -21,6 +22,7 @@
 		AC2B70475D3E7EDF47638498 /* AssetThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */; };
 		AC93118231C2E51A87616370 /* CleanupRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8027BE2D3A9467AA25CDCEF /* CleanupRulesTests.swift */; };
 		B379C5E9F1B376723E1D402D /* CleanupScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E0E1C082AB9740D7A44F92 /* CleanupScanner.swift */; };
+		B8BF1A37DE38324CE4867FC0 /* PreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F12A99C4754AE467B92AFA /* PreferenceTests.swift */; };
 		C0E211F592769D65580E48DA /* ViewerMathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE4C86E80ADFF2D613EE59A /* ViewerMathTests.swift */; };
 		C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BF1D87814390AC4ED5A511 /* LibraryView.swift */; };
 		DDA5E8B366640C1FFDB4DAE5 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E3C9D0A49C3A0B87CD69AB2 /* RootView.swift */; };
@@ -55,6 +57,7 @@
 		58BF1D87814390AC4ED5A511 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		5CAD670F01918D5F0AB9288E /* GridSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridSelection.swift; sourceTree = "<group>"; };
 		6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetThumbnail.swift; sourceTree = "<group>"; };
+		97F12A99C4754AE467B92AFA /* PreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceTests.swift; sourceTree = "<group>"; };
 		ABB8A3F08208A78341802D3D /* AssetViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetViewer.swift; sourceTree = "<group>"; };
 		B4928ADD43944CADA0410CB5 /* RxPhoneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RxPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9743964006EF9AD887A909C /* HorizontalPan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalPan.swift; sourceTree = "<group>"; };
@@ -65,6 +68,7 @@
 		D1923246F7938D200C61D1DE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D732CCCDC2A4FBE8D433DC11 /* DuplicateMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateMatcherTests.swift; sourceTree = "<group>"; };
 		D8027BE2D3A9467AA25CDCEF /* CleanupRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRulesTests.swift; sourceTree = "<group>"; };
+		E4D3DDA89E43FE9FAC6E1CDE /* Preference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preference.swift; sourceTree = "<group>"; };
 		EB3744655931C1DAFE221C32 /* RxPhoneUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RxPhoneUITests.swift; sourceTree = "<group>"; };
 		EE0ED4E008B40D0CF122244C /* MediaFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFilterTests.swift; sourceTree = "<group>"; };
 		F3E0E1C082AB9740D7A44F92 /* CleanupScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScanner.swift; sourceTree = "<group>"; };
@@ -87,6 +91,7 @@
 				B9743964006EF9AD887A909C /* HorizontalPan.swift */,
 				58BF1D87814390AC4ED5A511 /* LibraryView.swift */,
 				1A6443FA8005985A87E9B84A /* PhotoLibrary.swift */,
+				E4D3DDA89E43FE9FAC6E1CDE /* Preference.swift */,
 				4E3C9D0A49C3A0B87CD69AB2 /* RootView.swift */,
 				3694B9F246077E67190DE8E4 /* RxPhoneApp.swift */,
 				02EC33B585113EA4C867F374 /* ViewerMath.swift */,
@@ -101,6 +106,7 @@
 				D732CCCDC2A4FBE8D433DC11 /* DuplicateMatcherTests.swift */,
 				C0660B6589DC11BD539B2834 /* GridSelectionTests.swift */,
 				EE0ED4E008B40D0CF122244C /* MediaFilterTests.swift */,
+				97F12A99C4754AE467B92AFA /* PreferenceTests.swift */,
 				FBE4C86E80ADFF2D613EE59A /* ViewerMathTests.swift */,
 			);
 			path = RxPhoneTests;
@@ -254,6 +260,7 @@
 				A9F4C31A89DCFB5BCD9EF663 /* DuplicateMatcherTests.swift in Sources */,
 				263FF22BCDAC881C1C43B940 /* GridSelectionTests.swift in Sources */,
 				849975C4E510A3395CE9CE49 /* MediaFilterTests.swift in Sources */,
+				B8BF1A37DE38324CE4867FC0 /* PreferenceTests.swift in Sources */,
 				C0E211F592769D65580E48DA /* ViewerMathTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -272,6 +279,7 @@
 				E17B3BB11929A747D161D006 /* HorizontalPan.swift in Sources */,
 				C47A2A902A8DBF3BFE17340E /* LibraryView.swift in Sources */,
 				A5BB2CA1E19086DB694AD113 /* PhotoLibrary.swift in Sources */,
+				7C2DB1B65974ECFA59890987 /* Preference.swift in Sources */,
 				DDA5E8B366640C1FFDB4DAE5 /* RootView.swift in Sources */,
 				FA5136BADE60DABB42EA8B05 /* RxPhoneApp.swift in Sources */,
 				17F3215C2267B67A629B8924 /* ViewerMath.swift in Sources */,

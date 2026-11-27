@@ -30,6 +30,23 @@ nonisolated enum CleanupRules {
         groups.map { $0.filter { !isDeleted($0) } }.filter { $0.count > 1 }
     }
 
+    /// Keeps a duplicate-group selection valid after the groups change (a
+    /// rescan or a delete elsewhere): drops items that are gone, pre-selects
+    /// copies in groups not seen before, as on first open, and never lets a
+    /// group end up fully selected.
+    static func refreshDuplicateSelection<ID: Hashable>(
+        groups: [[ID]], selection: Set<ID>, seen: Set<ID>
+    ) -> Set<ID> {
+        var result = selection.intersection(groups.joined())
+        for group in groups {
+            for id in group.dropFirst() where !seen.contains(id) { result.insert(id) }
+            if let first = group.first, group.allSatisfy(result.contains) {
+                result.remove(first)
+            }
+        }
+        return result
+    }
+
     /// Compares the library a scan was based on with the library now: which
     /// scanned items are gone, and whether anything new arrived.
     static func libraryChanges<ID: Hashable>(scanned: Set<ID>, current: Set<ID>) -> (removed: Set<ID>, hasNew: Bool) {
