@@ -50,6 +50,11 @@ final class CleanupScanner {
     private(set) var skippedInCloud = 0
     /// Library items the last scan looked at, to tell later what changed.
     @ObservationIgnored private var scannedIDs: Set<String> = []
+    /// Fingerprints from earlier scans, loaded from disk on the first scan.
+    @ObservationIgnored private var store: FingerprintStore?
+    /// Photos whose fingerprint was reused in the last scan instead of
+    /// loading their thumbnail again.
+    private(set) var reusedFingerprints = 0
 
     var isScanning: Bool {
         if case .scanning = state { return true }
@@ -117,14 +122,30 @@ final class CleanupScanner {
     private func findDuplicates(in images: [PHAsset]) async -> [[PHAsset]] {
         let candidates = Dictionary(grouping: images) { "\($0.pixelWidth)x\($0.pixelHeight)" }
             .values.filter { $0.count > 1 }.flatMap { $0 }
-        state = .scanning(done: 0, total: candidates.count)
+        if store == nil {
+            store = await Task.detached(priority: .userInitiated) { FingerprintStore.load() }.value
+        }
+        var store = self.store ?? FingerprintStore()
 
+        // Reuse fingerprints of photos seen before and not edited since; only
+        // the rest need their thumbnail loaded.
         var fingerprinted: [(asset: PHAsset, print: DuplicateMatcher.Fingerprint)] = []
+        var missing: [PHAsset] = []
+        for asset in candidates {
+            if let print = store.fingerprint(for: asset.localIdentifier, modified: asset.modificationDate) {
+                fingerprinted.append((asset, print))
+            } else {
+                missing.append(asset)
+            }
+        }
+        reusedFingerprints = fingerprinted.count
+        state = .scanning(done: 0, total: missing.count)
+
         var skipped = 0
         var index = 0
         let chunkSize = 16
-        while index < candidates.count {
-            let chunk = Array(candidates[index..<min(index + chunkSize, candidates.count)])
+        while index < missing.count {
+            let chunk = Array(missing[index..<min(index + chunkSize, missing.count)])
             let prints = await Task.detached(priority: .userInitiated) {
                 await withTaskGroup(of: (Int, DuplicateMatcher.Fingerprint?).self) { group in
                     for (i, asset) in chunk.enumerated() {
@@ -136,12 +157,24 @@ final class CleanupScanner {
                 }
             }.value
             for (asset, print) in zip(chunk, prints) {
-                if let print { fingerprinted.append((asset, print)) } else { skipped += 1 }
+                if let print {
+                    fingerprinted.append((asset, print))
+                    store.set(print, for: asset.localIdentifier, modified: asset.modificationDate)
+                } else {
+                    skipped += 1
+                }
             }
             index += chunk.count
-            state = .scanning(done: index, total: candidates.count)
+            state = .scanning(done: index, total: missing.count)
         }
         skippedInCloud = skipped
+
+        store.prune(keeping: Set(images.map(\.localIdentifier)))
+        self.store = store
+        if !missing.isEmpty || store.count != candidates.count {
+            let snapshot = store
+            Task.detached(priority: .utility) { try? snapshot.save() }
+        }
 
         let groups = DuplicateMatcher.groups(fingerprinted.enumerated().map {
             (id: $0.offset, width: $0.element.asset.pixelWidth,
