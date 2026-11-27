@@ -18,6 +18,9 @@ struct RootView: View {
                     Tab("ทำความสะอาด", systemImage: "sparkles") {
                         CleanupView(library: library)
                     }
+                    Tab("พื้นที่", systemImage: "internaldrive") {
+                        StorageView(library: library)
+                    }
                 }
             } else {
                 PermissionView(library: library)
