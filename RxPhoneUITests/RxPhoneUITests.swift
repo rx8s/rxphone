@@ -1,0 +1,195 @@
+import XCTest
+
+/// End-to-end checks that drive the real app in the Simulator.
+///
+/// They need photo access and at least 3 photos in the Simulator's library,
+/// plus at least one exact duplicate for the cleanup test. Delete steps always
+/// tap "Don't Allow" in the system prompt, so the library is never changed.
+@MainActor
+final class RxPhoneUITests: XCTestCase {
+    private var app: XCUIApplication!
+    private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+
+    override func setUp() async throws {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launch()
+        grantAccessIfNeeded()
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 10), "No photos in the library")
+    }
+
+    // MARK: - Helpers
+
+    private var cells: XCUIElementQuery {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'cell-'"))
+    }
+
+    private var firstCell: XCUIElement { cells.element(boundBy: 0) }
+
+    private var selectionCount: XCUIElement { app.staticTexts["selection-count"] }
+
+    /// Taps through the permission screen and the system prompt on a fresh install.
+    private func grantAccessIfNeeded() {
+        let allow = app.buttons["อนุญาตการเข้าถึง"]
+        guard allow.waitForExistence(timeout: 3) else { return }
+        allow.tap()
+        let alert = springboard.alerts.firstMatch
+        if alert.waitForExistence(timeout: 5) {
+            let full = alert.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Full Access'")).firstMatch
+            (full.exists ? full : alert.buttons.element(boundBy: alert.buttons.count - 1)).tap()
+        }
+    }
+
+    /// The system's "Allow RxPhone to delete…?" prompt, wherever iOS shows it.
+    private func deletePrompt() -> XCUIElement? {
+        for alert in [app.alerts.firstMatch, springboard.alerts.firstMatch] where alert.waitForExistence(timeout: 5) {
+            return alert
+        }
+        return nil
+    }
+
+    private func declineDelete() {
+        guard let alert = deletePrompt() else { return XCTFail("Delete prompt did not appear") }
+        let decline = alert.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Allow' AND NOT (label BEGINSWITH[c] 'Allow')")).firstMatch
+        (decline.exists ? decline : alert.buttons.element(boundBy: 0)).tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+    }
+
+    private func enterSelectMode() {
+        app.navigationBars.buttons["เลือก"].tap()
+        XCTAssertTrue(selectionCount.waitForExistence(timeout: 3))
+        XCTAssertEqual(selectionCount.label, "เลือก 0 รายการ")
+    }
+
+    private func openViewer(on cell: XCUIElement) -> XCUIElement {
+        let id = cell.identifier.replacingOccurrences(of: "cell-", with: "")
+        cell.tap()
+        let page = app.descendants(matching: .any)["page-" + id]
+        XCTAssertTrue(page.waitForExistence(timeout: 5), "Viewer did not open on the tapped item")
+        return page
+    }
+
+    // MARK: - Library
+
+    func testLibraryShowsGridAndTabs() {
+        XCTAssertTrue(app.navigationBars["คลัง"].exists)
+        XCTAssertTrue(app.tabBars.buttons["คลัง"].exists)
+        XCTAssertTrue(app.tabBars.buttons["ทำความสะอาด"].exists)
+        XCTAssertGreaterThanOrEqual(cells.count, 3)
+    }
+
+    func testSortMenuReordersGrid() {
+        let newestFirst = firstCell.identifier
+        app.navigationBars.buttons["เรียงตาม"].tap()
+        app.buttons["เก่าสุดก่อน"].tap()
+        let predicate = NSPredicate(format: "identifier != %@", newestFirst)
+        expectation(for: predicate, evaluatedWith: firstCell)
+        waitForExpectations(timeout: 5)
+
+        app.navigationBars.buttons["เรียงตาม"].tap()
+        app.buttons["ใหม่สุดก่อน"].tap()
+        expectation(for: NSPredicate(format: "identifier == %@", newestFirst), evaluatedWith: firstCell)
+        waitForExpectations(timeout: 5)
+    }
+
+    func testTapToSelectAndDone() {
+        enterSelectMode()
+        cells.element(boundBy: 0).tap()
+        cells.element(boundBy: 1).tap()
+        XCTAssertEqual(selectionCount.label, "เลือก 2 รายการ")
+        cells.element(boundBy: 0).tap()
+        XCTAssertEqual(selectionCount.label, "เลือก 1 รายการ")
+
+        app.navigationBars.buttons["เสร็จ"].tap()
+        XCTAssertTrue(selectionCount.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars.buttons["เลือก"].exists)
+    }
+
+    func testDragAcrossRowSelectsRange() {
+        enterSelectMode()
+        let start = cells.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        let end = cells.element(boundBy: 2).coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertEqual(selectionCount.label, "เลือก 3 รายการ")
+    }
+
+    func testDeleteFromGridCanBeCancelled() {
+        let count = cells.count
+        enterSelectMode()
+        firstCell.tap()
+        app.buttons["ลบ"].tap()
+        declineDelete()
+        // Declining keeps the photo and the selection.
+        XCTAssertEqual(cells.count, count)
+        XCTAssertEqual(selectionCount.label, "เลือก 1 รายการ")
+    }
+
+    // MARK: - Viewer
+
+    func testViewerPagesAndCloses() {
+        let first = openViewer(on: firstCell)
+        let secondID = cells.element(boundBy: 1).identifier.replacingOccurrences(of: "cell-", with: "")
+        first.swipeLeft()
+        let second = app.descendants(matching: .any)["page-" + secondID]
+        XCTAssertTrue(second.waitForExistence(timeout: 3))
+        XCTAssertTrue(second.isHittable, "Swiping left should show the next item")
+
+        app.buttons["ปิด"].tap()
+        XCTAssertTrue(app.buttons["ปิด"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["คลัง"].exists)
+    }
+
+    func testSwipeDownClosesViewer() {
+        let page = openViewer(on: firstCell)
+        let top = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 400)))
+        XCTAssertTrue(app.buttons["ปิด"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["คลัง"].exists)
+    }
+
+    func testFavoriteToggles() {
+        _ = openViewer(on: firstCell)
+        let favorite = app.buttons["ชื่นชอบ"]
+        let unfavorite = app.buttons["เลิกชื่นชอบ"]
+        let wasFavorite = unfavorite.exists
+        (wasFavorite ? unfavorite : favorite).tap()
+        XCTAssertTrue((wasFavorite ? favorite : unfavorite).waitForExistence(timeout: 5))
+        // Put it back the way it was. The button stays disabled until the
+        // first change finishes saving, so wait for it.
+        let restore = wasFavorite ? favorite : unfavorite
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: restore)
+        waitForExpectations(timeout: 5)
+        restore.tap()
+        XCTAssertTrue((wasFavorite ? unfavorite : favorite).waitForExistence(timeout: 5))
+    }
+
+    func testDeleteFromViewerCanBeCancelled() {
+        let page = openViewer(on: firstCell)
+        app.buttons["ลบ"].tap()
+        declineDelete()
+        XCTAssertTrue(page.exists, "Declining should keep the item on screen")
+    }
+
+    // MARK: - Cleanup
+
+    func testCleanupFindsDuplicatesAndKeepsOne() {
+        app.tabBars.buttons["ทำความสะอาด"].tap()
+        let summary = app.staticTexts["ลบได้สูงสุด"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 60), "Scan did not finish")
+
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'รูปซ้ำ'")).firstMatch.tap()
+        XCTAssertTrue(selectionCount.waitForExistence(timeout: 3))
+        XCTAssertNotEqual(selectionCount.label, "เลือก 0 รายการ", "Duplicates should start selected")
+
+        // The copy marked "keep" is the last unselected one in its group.
+        let kept = app.descendants(matching: .any).matching(NSPredicate(format: "value == 'เก็บไว้'")).firstMatch
+        XCTAssertTrue(kept.exists)
+        let before = selectionCount.label
+        kept.tap()
+        XCTAssertTrue(app.staticTexts["ต้องเก็บไว้อย่างน้อย 1 รูปในแต่ละกลุ่ม"].waitForExistence(timeout: 3))
+        XCTAssertEqual(selectionCount.label, before)
+
+        app.buttons["ไม่เลือก"].tap()
+        XCTAssertEqual(selectionCount.label, "เลือก 0 รายการ")
+    }
+}

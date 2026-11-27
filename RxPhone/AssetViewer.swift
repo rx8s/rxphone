@@ -267,6 +267,7 @@ private struct AssetPage: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(asset.mediaType == .video ? "วีดีโอ" : "รูปภาพ")
+        .accessibilityIdentifier("page-" + asset.localIdentifier)
     }
 
     // MARK: Video

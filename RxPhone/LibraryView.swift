@@ -154,6 +154,7 @@ struct LibraryView: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(.default, activate)
         .accessibilityHint(isSelecting ? "แตะเพื่อเลือกหรือยกเลิก" : "แตะเพื่อดูเต็มจอ")
+        .accessibilityIdentifier("cell-" + id)
     }
 
     /// Drag sideways across cells to select (or deselect) a range, like Photos.
@@ -259,7 +260,9 @@ struct LibraryView: View {
     private var selectionBar: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("เลือก \(selection.count) รายการ").font(.headline)
+                Text("เลือก \(selection.count) รายการ")
+                    .font(.headline)
+                    .accessibilityIdentifier("selection-count")
                 if !selection.isEmpty {
                     Text(selectedSizeText)
                         .font(.subheadline)

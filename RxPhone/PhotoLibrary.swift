@@ -14,7 +14,19 @@ enum SortOrder: String, CaseIterable, Identifiable {
 @Observable
 final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
     private(set) var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-    private(set) var assets: [PHAsset] = []
+    /// Always notifies on set. PHAsset equality only compares the identifier,
+    /// so Observation would otherwise skip a reload where only metadata such
+    /// as `isFavorite` changed, and the UI would keep showing the old value.
+    private(set) var assets: [PHAsset] {
+        get {
+            access(keyPath: \.assets)
+            return storedAssets
+        }
+        set {
+            withMutation(keyPath: \.assets) { storedAssets = newValue }
+        }
+    }
+    @ObservationIgnored private var storedAssets: [PHAsset] = []
     private(set) var isLoaded = false
     private(set) var isMeasuring = false
     /// File size in bytes, keyed by `PHAsset.localIdentifier`.

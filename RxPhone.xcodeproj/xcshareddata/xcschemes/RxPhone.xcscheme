@@ -51,6 +51,17 @@
                ReferencedContainer = "container:RxPhone.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E1179FB14BCA56158F3D9266"
+               BuildableName = "RxPhoneUITests.xctest"
+               BlueprintName = "RxPhoneUITests"
+               ReferencedContainer = "container:RxPhone.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

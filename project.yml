@@ -26,7 +26,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "RxPhone ใช้สิทธิ์นี้เพื่อแสดง จัดเรียง และลบรูปภาพกับวีดีโอในเครื่องตามที่คุณเลือก"
     scheme:
-      testTargets: [RxPhoneTests]
+      testTargets: [RxPhoneTests, RxPhoneUITests]
   RxPhoneTests:
     type: bundle.unit-test
     platform: iOS
@@ -37,3 +37,15 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rx8s.rxphone.tests
         GENERATE_INFOPLIST_FILE: YES
+  RxPhoneUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [RxPhoneUITests]
+    dependencies:
+      - target: RxPhone
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rx8s.rxphone.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: RxPhone
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated

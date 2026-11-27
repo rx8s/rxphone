@@ -280,7 +280,9 @@ struct CleanupDetailView: View {
         let bytes = selectedAssets.reduce(Int64(0)) { $0 + (library.sizes[$1.localIdentifier] ?? 0) }
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("เลือก \(selection.count) รายการ").font(.headline)
+                Text("เลือก \(selection.count) รายการ")
+                    .font(.headline)
+                    .accessibilityIdentifier("selection-count")
                 if !selection.isEmpty {
                     Text("รวม " + bytes.fileSizeText)
                         .font(.subheadline)
