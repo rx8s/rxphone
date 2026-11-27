@@ -114,14 +114,78 @@ final class RxPhoneUITests: XCTestCase {
     }
 
     func testDeleteFromGridCanBeCancelled() {
-        let count = cells.count
+        // The grid is lazy, so count from the filter title, not the cells.
+        let count = segment("ทั้งหมด").label
         enterSelectMode()
         firstCell.tap()
         app.buttons["ลบ"].tap()
         declineDelete()
         // Declining keeps the photo and the selection.
-        XCTAssertEqual(cells.count, count)
+        XCTAssertEqual(segment("ทั้งหมด").label, count)
         XCTAssertEqual(selectionCount.label, "เลือก 1 รายการ")
+    }
+
+    // MARK: - Photo / video filter
+
+    private func segment(_ title: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title + " (")).firstMatch
+    }
+
+    /// The number in a segment title such as "วีดีโอ (2)".
+    private func count(in segment: XCUIElement) -> Int {
+        Int(segment.label.split(separator: "(").last!.dropLast()) ?? -1
+    }
+
+    func testFilterShowsOnlyVideosThenOnlyPhotos() {
+        let all = count(in: segment("ทั้งหมด"))
+        let videos = count(in: segment("วีดีโอ"))
+        let photos = count(in: segment("รูปภาพ"))
+        XCTAssertEqual(all, videos + photos)
+        XCTAssertGreaterThan(videos, 0, "Needs at least one video in the library")
+
+        segment("วีดีโอ").tap()
+        expectation(for: NSPredicate(format: "count == %d", videos), evaluatedWith: cells)
+        waitForExpectations(timeout: 5)
+        for cell in cells.allElementsBoundByIndex {
+            XCTAssertTrue(cell.label.hasPrefix("วีดีโอ"), "Non-video shown: \(cell.label)")
+        }
+
+        segment("รูปภาพ").tap()
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 5))
+        XCTAssertTrue(firstCell.label.hasPrefix("รูปภาพ"))
+        XCTAssertFalse(cells.allElementsBoundByIndex.contains { $0.label.hasPrefix("วีดีโอ") })
+
+        segment("ทั้งหมด").tap()
+        // The grid is lazy: only on-screen cells exist, so check for a mix.
+        let video = cells.matching(NSPredicate(format: "label BEGINSWITH 'วีดีโอ'")).firstMatch
+        let photo = cells.matching(NSPredicate(format: "label BEGINSWITH 'รูปภาพ'")).firstMatch
+        XCTAssertTrue(video.waitForExistence(timeout: 5))
+        XCTAssertTrue(photo.exists)
+    }
+
+    func testViewerPagesOnlyWithinFilter() {
+        segment("วีดีโอ").tap()
+        let last = cells.element(boundBy: cells.count - 1)
+        XCTAssertTrue(last.waitForExistence(timeout: 5))
+        let page = openViewer(on: last)
+        // Swiping past the last video must not reveal a photo.
+        page.swipeLeft()
+        XCTAssertTrue(page.isHittable)
+        XCTAssertFalse(app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'page-' AND label == 'รูปภาพ'"))
+            .firstMatch.exists)
+    }
+
+    func testSwitchingFilterDropsHiddenSelection() {
+        enterSelectMode()
+        segment("รูปภาพ").tap()
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 5))
+        firstCell.tap()
+        XCTAssertEqual(selectionCount.label, "เลือก 1 รายการ")
+        // The selected photo is hidden under วีดีโอ, so it must not stay selected
+        // and be deleted unseen.
+        segment("วีดีโอ").tap()
+        XCTAssertEqual(selectionCount.label, "เลือก 0 รายการ")
     }
 
     // MARK: - Viewer

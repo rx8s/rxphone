@@ -38,6 +38,8 @@ struct LibraryView: View {
     /// ScrollView frame and the selection bar's top edge, in screen coordinates.
     @State private var scrollFrame: CGRect = .zero
     @State private var selectionBarTop: CGFloat?
+    /// Bottom edge of the pinned filter bar, in screen coordinates.
+    @State private var filterBarBottom: CGFloat?
     @State private var scrollPosition = ScrollPosition()
     @State private var scrollMetrics = ScrollMetrics()
     /// Distance from the top/bottom edge where auto-scroll kicks in.
@@ -73,7 +75,7 @@ struct LibraryView: View {
         ScrollView {
             if library.status == .limited { limitedBanner }
             LazyVGrid(columns: columns, spacing: Self.cellSpacing) {
-                ForEach(library.assets, id: \.localIdentifier) { asset in
+                ForEach(library.shownAssets, id: \.localIdentifier) { asset in
                     cell(for: asset)
                 }
             }
@@ -98,9 +100,7 @@ struct LibraryView: View {
         .task(id: dragSelect != nil) { await autoScroll() }
         .sensoryFeedback(.selection, trigger: selection.count) { _, _ in dragSelect != nil }
         .overlay {
-            if library.isLoaded && library.assets.isEmpty {
-                ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
-            }
+            if library.isLoaded && library.shownAssets.isEmpty { emptyState }
         }
         .overlay {
             if library.isMeasuring && library.sortOrder == .largest {
@@ -111,6 +111,18 @@ struct LibraryView: View {
         }
         .overlay(alignment: .top) {
             if let toast { ToastView(text: toast) }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if library.hasAccess {
+                filterBar
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: {
+                        filterBarBottom = $0
+                    }
+            }
+        }
+        .onChange(of: library.mediaFilter) {
+            // Never keep hidden items selected: they would be deleted unseen.
+            selection.formIntersection(library.shownAssets.map(\.localIdentifier))
         }
         .safeAreaInset(edge: .bottom) {
             if isSelecting {
@@ -165,7 +177,7 @@ struct LibraryView: View {
         switch phase {
         case let .began(start, location):
             guard let startIndex = index(at: start) else { return }
-            let id = library.assets[startIndex].localIdentifier
+            let id = library.shownAssets[startIndex].localIdentifier
             dragSelect = DragSelect(
                 startIndex: startIndex,
                 adding: !selection.contains(id),
@@ -187,7 +199,7 @@ struct LibraryView: View {
               let finger = fingerLocation,
               let current = index(at: finger) else { return }
         let updated = GridSelection.select(
-            ids: library.assets.map(\.localIdentifier),
+            ids: library.shownAssets.map(\.localIdentifier),
             from: drag.startIndex, to: current, adding: drag.adding, base: drag.base
         )
         if updated != selection { selection = updated }
@@ -203,7 +215,7 @@ struct LibraryView: View {
                 let m = scrollMetrics
                 // Visible band on screen: below the nav bar (the ScrollView's
                 // reported frame already starts there), above the selection bar.
-                let visibleTop = scrollFrame.minY
+                let visibleTop = max(scrollFrame.minY, filterBarBottom ?? scrollFrame.minY)
                 let visibleBottom = selectionBarTop ?? scrollFrame.maxY
                 let step = GridSelection.autoScrollStep(
                     fingerY: finger.y, visibleTop: visibleTop, visibleBottom: visibleBottom,
@@ -223,8 +235,34 @@ struct LibraryView: View {
     /// column math as `GridItem.adaptive`. Points above or below the grid clamp
     /// to the first or last row.
     private func index(at viewportPoint: CGPoint) -> Int? {
-        GridSelection.index(at: viewportPoint, gridFrame: gridFrame, itemCount: library.assets.count,
+        GridSelection.index(at: viewportPoint, gridFrame: gridFrame, itemCount: library.shownAssets.count,
                             minCellSize: Self.cellMinSize, spacing: Self.cellSpacing)
+    }
+
+    private var filterBar: some View {
+        Picker("แสดง", selection: $library.mediaFilter) {
+            ForEach(MediaFilter.allCases) { filter in
+                Text("\(filter.rawValue) (\(library.count(for: filter)))").tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .disabled(isDeleting || dragSelect != nil)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        // Keep the material out of the navigation bar, or it covers the title.
+        .background(.bar, ignoresSafeAreaEdges: [])
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        switch library.mediaFilter {
+        case _ where library.assets.isEmpty:
+            ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
+        case .all, .photos:
+            ContentUnavailableView("ไม่มีรูปภาพ", systemImage: "photo")
+        case .videos:
+            ContentUnavailableView("ไม่มีวีดีโอ", systemImage: "video")
+        }
     }
 
     private var limitedBanner: some View {
@@ -248,7 +286,7 @@ struct LibraryView: View {
     // MARK: - Selection
 
     private var selectedAssets: [PHAsset] {
-        library.assets.filter { selection.contains($0.localIdentifier) }
+        library.shownAssets.filter { selection.contains($0.localIdentifier) }
     }
 
     private var selectedSizeText: String {
@@ -335,7 +373,7 @@ struct LibraryView: View {
                     isSelecting.toggle()
                     if !isSelecting { selection.removeAll() }
                 }
-                .disabled(library.assets.isEmpty || isDeleting)
+                .disabled(library.shownAssets.isEmpty || isDeleting)
             }
         }
     }

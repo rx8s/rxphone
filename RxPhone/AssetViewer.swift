@@ -26,7 +26,7 @@ struct AssetViewer: View {
     }
 
     private var current: PHAsset? {
-        library.assets.first { $0.localIdentifier == position }
+        library.shownAssets.first { $0.localIdentifier == position }
     }
 
     var body: some View {
@@ -60,7 +60,7 @@ struct AssetViewer: View {
     private var pager: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
-                ForEach(library.assets, id: \.localIdentifier) { asset in
+                ForEach(library.shownAssets, id: \.localIdentifier) { asset in
                     AssetPage(
                         asset: asset,
                         isCurrent: asset.localIdentifier == position,
@@ -194,9 +194,9 @@ struct AssetViewer: View {
 
     private func deleteCurrent() async {
         guard let asset = current,
-              let index = library.assets.firstIndex(of: asset) else { return }
+              let index = library.shownAssets.firstIndex(of: asset) else { return }
         // Land on the next item, or the previous one when deleting the last.
-        let neighbor = ViewerMath.neighbor(afterDeleting: index, in: library.assets.map(\.localIdentifier))
+        let neighbor = ViewerMath.neighbor(afterDeleting: index, in: library.shownAssets.map(\.localIdentifier))
         isWorking = true
         defer { isWorking = false }
         do {

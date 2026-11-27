@@ -10,6 +10,23 @@ enum SortOrder: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+/// Which media types the library grid and viewer show.
+enum MediaFilter: String, CaseIterable, Identifiable {
+    case all = "ทั้งหมด"
+    case photos = "รูปภาพ"
+    case videos = "วีดีโอ"
+
+    var id: Self { self }
+
+    func includes(_ type: PHAssetMediaType) -> Bool {
+        switch self {
+        case .all: type == .image || type == .video
+        case .photos: type == .image
+        case .videos: type == .video
+        }
+    }
+}
+
 /// Wraps PhotoKit: permission, fetching photos/videos, file sizes and deletion.
 @Observable
 final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
@@ -27,6 +44,33 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
     @ObservationIgnored private var storedAssets: [PHAsset] = []
+
+    /// `assets` narrowed to `mediaFilter`; what the library grid and viewer
+    /// show. Always notifies on set, for the same reason as `assets`.
+    private(set) var shownAssets: [PHAsset] {
+        get {
+            access(keyPath: \.shownAssets)
+            return storedShownAssets
+        }
+        set {
+            withMutation(keyPath: \.shownAssets) { storedShownAssets = newValue }
+        }
+    }
+    @ObservationIgnored private var storedShownAssets: [PHAsset] = []
+    private(set) var photoCount = 0
+    private(set) var videoCount = 0
+
+    var mediaFilter: MediaFilter = .all {
+        didSet { if mediaFilter != oldValue { applyFilter() } }
+    }
+
+    func count(for filter: MediaFilter) -> Int {
+        switch filter {
+        case .all: photoCount + videoCount
+        case .photos: photoCount
+        case .videos: videoCount
+        }
+    }
     private(set) var isLoaded = false
     private(set) var isMeasuring = false
     /// File size in bytes, keyed by `PHAsset.localIdentifier`.
@@ -77,7 +121,14 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
             list.sort { (sizes[$0.localIdentifier] ?? 0) > (sizes[$1.localIdentifier] ?? 0) }
         }
         assets = list
+        photoCount = list.count { $0.mediaType == .image }
+        videoCount = list.count { $0.mediaType == .video }
+        applyFilter()
         isLoaded = true
+    }
+
+    private func applyFilter() {
+        shownAssets = mediaFilter == .all ? assets : assets.filter { mediaFilter.includes($0.mediaType) }
     }
 
     /// Computes file sizes for assets not measured yet, off the main thread.
