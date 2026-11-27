@@ -81,6 +81,11 @@ final class RxPhoneUITests: XCTestCase {
         cell.tap()
         let page = app.descendants(matching: .any)["page-" + id]
         XCTAssertTrue(page.waitForExistence(timeout: 5), "Viewer did not open on the tapped item")
+        // Taps during the slide-up animation are dropped, so wait until the
+        // viewer has settled at the top of the screen.
+        let settled = NSPredicate { _, _ in page.frame.minY.magnitude < 1 }
+        expectation(for: settled, evaluatedWith: page)
+        waitForExpectations(timeout: 5)
         return page
     }
 
@@ -222,6 +227,35 @@ final class RxPhoneUITests: XCTestCase {
         // Leave the saved choices at their defaults.
         app.buttons["ใหม่สุดก่อน"].tap()
         resetFilter()
+    }
+
+    // MARK: - Categories
+
+    func testCategoriesTabListsKindsAndOpensOne() throws {
+        app.tabBars.buttons["หมวดหมู่"].tap()
+        XCTAssertTrue(app.navigationBars["หมวดหมู่"].waitForExistence(timeout: 5))
+        func row(_ id: String) -> XCUIElement { app.descendants(matching: .any)["category-" + id] }
+        for id in ["livePhotos", "selfies", "screenshots"] {
+            XCTAssertTrue(row(id).waitForExistence(timeout: 5), "Missing category \(id)")
+        }
+        // The list loads rows as they scroll in; the videos section is lower.
+        app.swipeUp()
+        XCTAssertTrue(row("screenRecordings").waitForExistence(timeout: 5), "Missing screen recordings")
+        app.swipeDown()
+
+        // Open the first category that has items, if the Simulator has any.
+        let rows = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'category-' AND isEnabled == true"))
+        guard rows.count > 0 else { throw XCTSkip("No category has items in this Simulator") }
+        let row = rows.element(boundBy: 0)
+        let title = row.label
+        row.tap()
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 5), "Category grid is empty")
+        XCTAssertTrue(app.navigationBars.buttons["เลือก"].isEnabled)
+        // No library-wide controls inside a category.
+        XCTAssertFalse(app.navigationBars.buttons["เรียงตาม"].exists)
+        XCTAssertFalse(segment("ทั้งหมด").exists)
     }
 
     // MARK: - Viewer

@@ -2,8 +2,30 @@ import Photos
 import PhotosUI
 import SwiftUI
 
+/// The คลัง tab: every photo and video, with the filter and sort controls.
 struct LibraryView: View {
     @Bindable var library: PhotoLibrary
+
+    var body: some View {
+        NavigationStack {
+            AssetGridScreen(library: library, title: "คลัง", assets: library.shownAssets,
+                            source: .library, showsLibraryControls: true)
+        }
+    }
+}
+
+/// A grid of photos and videos with tap-to-view, select, drag-select with
+/// auto-scroll, and delete. Used by the คลัง tab and by each category. Must be
+/// placed inside a NavigationStack.
+struct AssetGridScreen: View {
+    @Bindable var library: PhotoLibrary
+    let title: String
+    let assets: [PHAsset]
+    /// Where `assets` came from; the viewer reloads from it on changes.
+    let source: AssetSource
+    /// The library-wide filter bar, sort menu and limited-access banner.
+    var showsLibraryControls = false
+
     @State private var isSelecting = false
     @State private var selection: Set<String> = []
     @State private var isDeleting = false
@@ -52,13 +74,11 @@ struct LibraryView: View {
     private let columns = [GridItem(.adaptive(minimum: cellMinSize), spacing: cellSpacing)]
 
     var body: some View {
-        NavigationStack {
-            grid
-                .navigationTitle("คลัง")
-                .toolbar { toolbar }
-        }
+        grid
+            .navigationTitle(title)
+            .toolbar { toolbar }
         .fullScreenCover(item: $viewer) { target in
-            AssetViewer(library: library, startID: target.id)
+            AssetViewer(library: library, source: source, startID: target.id)
                 // Lets the grid show through while swiping down to close.
                 .presentationBackground(.clear)
         }
@@ -73,9 +93,9 @@ struct LibraryView: View {
 
     private var grid: some View {
         ScrollView {
-            if library.status == .limited { limitedBanner }
+            if showsLibraryControls && library.status == .limited { limitedBanner }
             LazyVGrid(columns: columns, spacing: Self.cellSpacing) {
-                ForEach(library.shownAssets, id: \.localIdentifier) { asset in
+                ForEach(assets, id: \.localIdentifier) { asset in
                     cell(for: asset)
                 }
             }
@@ -100,10 +120,10 @@ struct LibraryView: View {
         .task(id: dragSelect != nil) { await autoScroll() }
         .sensoryFeedback(.selection, trigger: selection.count) { _, _ in dragSelect != nil }
         .overlay {
-            if library.isLoaded && library.shownAssets.isEmpty { emptyState }
+            if library.isLoaded && assets.isEmpty { emptyState }
         }
         .overlay {
-            if library.isMeasuring && library.sortOrder == .largest {
+            if library.isMeasuring && showsSizes {
                 ProgressView("กำลังคำนวณขนาดไฟล์…")
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -113,16 +133,17 @@ struct LibraryView: View {
             if let toast { ToastView(text: toast) }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if library.hasAccess {
+            if showsLibraryControls && library.hasAccess {
                 filterBar
                     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: {
                         filterBarBottom = $0
                     }
             }
         }
-        .onChange(of: library.mediaFilter) {
-            // Never keep hidden items selected: they would be deleted unseen.
-            selection.formIntersection(library.shownAssets.map(\.localIdentifier))
+        .onChange(of: assets.map(\.localIdentifier)) { _, ids in
+            // Never keep hidden or deleted items selected: a filter change
+            // would otherwise delete items the user can no longer see.
+            selection.formIntersection(ids)
         }
         .safeAreaInset(edge: .bottom) {
             if isSelecting {
@@ -141,7 +162,7 @@ struct LibraryView: View {
     private func cell(for asset: PHAsset) -> some View {
         let id = asset.localIdentifier
         let selected = selection.contains(id)
-        let size = library.sortOrder == .largest ? library.sizes[id].map(Self.format) : nil
+        let size = showsSizes ? library.sizes[id].map(Self.format) : nil
         let activate = {
             if !isSelecting {
                 viewer = ViewerTarget(id: id)
@@ -177,7 +198,7 @@ struct LibraryView: View {
         switch phase {
         case let .began(start, location):
             guard let startIndex = index(at: start) else { return }
-            let id = library.shownAssets[startIndex].localIdentifier
+            let id = assets[startIndex].localIdentifier
             dragSelect = DragSelect(
                 startIndex: startIndex,
                 adding: !selection.contains(id),
@@ -199,7 +220,7 @@ struct LibraryView: View {
               let finger = fingerLocation,
               let current = index(at: finger) else { return }
         let updated = GridSelection.select(
-            ids: library.shownAssets.map(\.localIdentifier),
+            ids: assets.map(\.localIdentifier),
             from: drag.startIndex, to: current, adding: drag.adding, base: drag.base
         )
         if updated != selection { selection = updated }
@@ -235,7 +256,7 @@ struct LibraryView: View {
     /// column math as `GridItem.adaptive`. Points above or below the grid clamp
     /// to the first or last row.
     private func index(at viewportPoint: CGPoint) -> Int? {
-        GridSelection.index(at: viewportPoint, gridFrame: gridFrame, itemCount: library.shownAssets.count,
+        GridSelection.index(at: viewportPoint, gridFrame: gridFrame, itemCount: assets.count,
                             minCellSize: Self.cellMinSize, spacing: Self.cellSpacing)
     }
 
@@ -253,9 +274,14 @@ struct LibraryView: View {
         .background(.bar, ignoresSafeAreaEdges: [])
     }
 
+    /// File sizes on thumbnails, only while the library is sorted by size.
+    private var showsSizes: Bool { showsLibraryControls && library.sortOrder == .largest }
+
     @ViewBuilder
     private var emptyState: some View {
         switch library.mediaFilter {
+        case _ where !showsLibraryControls:
+            ContentUnavailableView("ไม่มีรายการในหมวดนี้", systemImage: "photo.on.rectangle")
         case _ where library.assets.isEmpty:
             ContentUnavailableView("ยังไม่มีรูปหรือวีดีโอ", systemImage: "photo")
         case .all, .photos:
@@ -286,7 +312,7 @@ struct LibraryView: View {
     // MARK: - Selection
 
     private var selectedAssets: [PHAsset] {
-        library.shownAssets.filter { selection.contains($0.localIdentifier) }
+        assets.filter { selection.contains($0.localIdentifier) }
     }
 
     private var selectedSizeText: String {
@@ -357,7 +383,7 @@ struct LibraryView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        if library.hasAccess {
+        if showsLibraryControls && library.hasAccess {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Picker("เรียงตาม", selection: $library.sortOrder) {
@@ -368,12 +394,14 @@ struct LibraryView: View {
                 }
                 .disabled(isDeleting)
             }
+        }
+        if library.hasAccess {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isSelecting ? "เสร็จ" : "เลือก") {
                     isSelecting.toggle()
                     if !isSelecting { selection.removeAll() }
                 }
-                .disabled(library.shownAssets.isEmpty || isDeleting)
+                .disabled(assets.isEmpty || isDeleting)
             }
         }
     }

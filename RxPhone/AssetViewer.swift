@@ -20,13 +20,20 @@ struct AssetViewer: View {
     /// 0 at rest, 1 when dragged far enough to be fully faded.
     private var dragProgress: CGFloat { ViewerMath.dismissProgress(offset: dragOffset) }
 
-    init(library: PhotoLibrary, startID: String) {
+    let source: AssetSource
+    /// The items to page through, in grid order, read from the library on
+    /// every render. A copy held in this view would go stale: a presented
+    /// view keeps its first state, so a changed favorite would not show.
+    private var assets: [PHAsset] { library.assets(for: source) }
+
+    init(library: PhotoLibrary, source: AssetSource, startID: String) {
         self.library = library
+        self.source = source
         _position = State(initialValue: startID)
     }
 
     private var current: PHAsset? {
-        library.shownAssets.first { $0.localIdentifier == position }
+        assets.first { $0.localIdentifier == position }
     }
 
     var body: some View {
@@ -60,7 +67,7 @@ struct AssetViewer: View {
     private var pager: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
-                ForEach(library.shownAssets, id: \.localIdentifier) { asset in
+                ForEach(assets, id: \.localIdentifier) { asset in
                     AssetPage(
                         asset: asset,
                         isCurrent: asset.localIdentifier == position,
@@ -194,9 +201,9 @@ struct AssetViewer: View {
 
     private func deleteCurrent() async {
         guard let asset = current,
-              let index = library.shownAssets.firstIndex(of: asset) else { return }
+              let index = assets.firstIndex(of: asset) else { return }
         // Land on the next item, or the previous one when deleting the last.
-        let neighbor = ViewerMath.neighbor(afterDeleting: index, in: library.shownAssets.map(\.localIdentifier))
+        let neighbor = ViewerMath.neighbor(afterDeleting: index, in: assets.map(\.localIdentifier))
         isWorking = true
         defer { isWorking = false }
         do {

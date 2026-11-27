@@ -8,6 +8,8 @@ struct AssetThumbnail: View {
     let isSelected: Bool
     /// Shown when the grid is sorted by size.
     let sizeText: String?
+    /// False for small covers, where the video length badge would not fit.
+    var showsDuration = true
 
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
@@ -27,7 +29,7 @@ struct AssetThumbnail: View {
                 if let sizeText { Badge(text: sizeText) }
             }
             .overlay(alignment: .bottomTrailing) {
-                if asset.mediaType == .video {
+                if showsDuration && asset.mediaType == .video {
                     Badge(text: Self.duration(asset.duration), systemImage: "play.fill")
                 }
             }

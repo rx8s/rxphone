@@ -141,6 +141,43 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
         shownAssets = mediaFilter == .all ? assets : assets.filter { mediaFilter.includes($0.mediaType) }
     }
 
+    /// The items a grid shows: the filtered library or one category. Views
+    /// that call this re-render on every library change, with fresh PHAssets.
+    func assets(for source: AssetSource) -> [PHAsset] {
+        switch source {
+        case .library: return shownAssets
+        case let .category(category): return assets(in: category)
+        }
+    }
+
+    /// Category lists fetched since the last reload, so views can ask for
+    /// them on every render without re-fetching.
+    @ObservationIgnored private var categoryCache: [MediaCategory: (revision: Int, list: [PHAsset])] = [:]
+
+    /// Photos and videos in a category's smart album, newest first. Reading
+    /// `revision` makes callers re-render after every library change.
+    func assets(in category: MediaCategory) -> [PHAsset] {
+        let current = revision
+        if let cached = categoryCache[category], cached.revision == current { return cached.list }
+        let list = fetchAssets(in: category)
+        categoryCache[category] = (current, list)
+        return list
+    }
+
+    private func fetchAssets(in category: MediaCategory) -> [PHAsset] {
+        guard hasAccess,
+              let album = PHAssetCollection.fetchAssetCollections(
+                  with: .smartAlbum, subtype: category.smartAlbum, options: nil
+              ).firstObject else { return [] }
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let result = PHAsset.fetchAssets(in: album, options: options)
+        var list: [PHAsset] = []
+        list.reserveCapacity(result.count)
+        result.enumerateObjects { asset, _, _ in list.append(asset) }
+        return list
+    }
+
     /// Computes file sizes for assets not measured yet, off the main thread.
     func measure(_ list: [PHAsset]) async {
         let missing = list.filter { sizes[$0.localIdentifier] == nil }

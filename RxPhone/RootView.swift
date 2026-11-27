@@ -12,6 +12,9 @@ struct RootView: View {
                     Tab("คลัง", systemImage: "photo.on.rectangle") {
                         LibraryView(library: library)
                     }
+                    Tab("หมวดหมู่", systemImage: "square.grid.2x2") {
+                        CategoriesView(library: library)
+                    }
                     Tab("ทำความสะอาด", systemImage: "sparkles") {
                         CleanupView(library: library)
                     }
