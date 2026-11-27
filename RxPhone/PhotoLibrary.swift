@@ -72,6 +72,8 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
     private(set) var isLoaded = false
+    /// Goes up on every reload, so views can react to library changes.
+    private(set) var revision = 0
     private(set) var isMeasuring = false
     /// File size in bytes, keyed by `PHAsset.localIdentifier`.
     private(set) var sizes: [String: Int64] = [:]
@@ -125,6 +127,7 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
         videoCount = list.count { $0.mediaType == .video }
         applyFilter()
         isLoaded = true
+        revision += 1
     }
 
     private func applyFilter() {

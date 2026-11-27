@@ -30,6 +30,12 @@ nonisolated enum CleanupRules {
         groups.map { $0.filter { !isDeleted($0) } }.filter { $0.count > 1 }
     }
 
+    /// Compares the library a scan was based on with the library now: which
+    /// scanned items are gone, and whether anything new arrived.
+    static func libraryChanges<ID: Hashable>(scanned: Set<ID>, current: Set<ID>) -> (removed: Set<ID>, hasNew: Bool) {
+        (scanned.subtracting(current), !current.isSubset(of: scanned))
+    }
+
     /// Bytes freed by deleting every copy in `group` except the first.
     static func wastedBytes<T>(_ group: [T], size: (T) -> Int64) -> Int64 {
         group.dropFirst().reduce(0) { $0 + size($1) }

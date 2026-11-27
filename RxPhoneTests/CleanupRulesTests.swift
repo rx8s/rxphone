@@ -81,6 +81,32 @@ struct CleanupRulesTests {
         #expect(CleanupRules.prune(groups) { _ in true }.isEmpty)
     }
 
+    // MARK: - Library changes after a scan
+
+    @Test("Deleted items are reported so they leave the results")
+    func removedItems() {
+        let changes = CleanupRules.libraryChanges(scanned: ["a", "b", "c"], current: ["a", "c"])
+        #expect(changes.removed == ["b"])
+        #expect(!changes.hasNew)
+    }
+
+    @Test("New items call for a rescan")
+    func newItems() {
+        let changes = CleanupRules.libraryChanges(scanned: ["a", "b"], current: ["a", "b", "new"])
+        #expect(changes.removed.isEmpty)
+        #expect(changes.hasNew)
+        let both = CleanupRules.libraryChanges(scanned: ["a", "b"], current: ["a", "new"])
+        #expect(both.removed == ["b"])
+        #expect(both.hasNew)
+    }
+
+    @Test("Reordering or no change does nothing")
+    func noChange() {
+        let changes = CleanupRules.libraryChanges(scanned: ["a", "b"], current: ["b", "a"])
+        #expect(changes.removed.isEmpty)
+        #expect(!changes.hasNew)
+    }
+
     @Test("Space freed counts every copy except the one kept")
     func wastedBytes() {
         let sizes = ["keep": 500, "x": 300, "y": 200]

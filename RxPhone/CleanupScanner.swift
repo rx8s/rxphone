@@ -45,6 +45,11 @@ final class CleanupScanner {
     private(set) var duplicateGroups: [[PHAsset]] = []
     private(set) var largeVideos: [PHAsset] = []
     private(set) var screenshots: [PHAsset] = []
+    /// Photos left out of the duplicate check because their thumbnail is only
+    /// in iCloud. The scan never downloads, to save data.
+    private(set) var skippedInCloud = 0
+    /// Library items the last scan looked at, to tell later what changed.
+    @ObservationIgnored private var scannedIDs: Set<String> = []
 
     var isScanning: Bool {
         if case .scanning = state { return true }
@@ -63,6 +68,7 @@ final class CleanupScanner {
         guard !isScanning else { return }
         state = .scanning(done: 0, total: 0)
         let all = library.assets
+        scannedIDs = Set(all.map(\.localIdentifier))
 
         let shots = all.filter { $0.mediaType == .image && $0.mediaSubtypes.contains(.photoScreenshot) }
         let videos = all.filter { $0.mediaType == .video }
@@ -76,6 +82,24 @@ final class CleanupScanner {
         await library.measure(duplicateGroups.flatMap { $0 })
         duplicateGroups.sort { wasted($0, library) > wasted($1, library) }
         state = .finished
+    }
+
+    /// Brings results in line with the library after it changed: deleted
+    /// items drop out right away; new items trigger a rescan after `delay`.
+    /// Called from a task that restarts on every change, so a burst of
+    /// changes waits out the delay once and scans once.
+    func sync(with library: PhotoLibrary, delay: Duration = .seconds(2)) async {
+        guard state == .finished else { return }
+        let current = Set(library.assets.map(\.localIdentifier))
+        let changes = CleanupRules.libraryChanges(scanned: scannedIDs, current: current)
+        if !changes.removed.isEmpty {
+            remove(changes.removed)
+            scannedIDs.subtract(changes.removed)
+        }
+        guard changes.hasNew else { return }
+        try? await Task.sleep(for: delay)
+        guard !Task.isCancelled else { return }
+        await scan(library)
     }
 
     /// Drops deleted assets from the results.
@@ -95,6 +119,7 @@ final class CleanupScanner {
         state = .scanning(done: 0, total: candidates.count)
 
         var fingerprinted: [(asset: PHAsset, print: DuplicateMatcher.Fingerprint)] = []
+        var skipped = 0
         var index = 0
         let chunkSize = 16
         while index < candidates.count {
@@ -110,11 +135,12 @@ final class CleanupScanner {
                 }
             }.value
             for (asset, print) in zip(chunk, prints) {
-                if let print { fingerprinted.append((asset, print)) }
+                if let print { fingerprinted.append((asset, print)) } else { skipped += 1 }
             }
             index += chunk.count
             state = .scanning(done: index, total: candidates.count)
         }
+        skippedInCloud = skipped
 
         let groups = DuplicateMatcher.groups(fingerprinted.enumerated().map {
             (id: $0.offset, width: $0.element.asset.pixelWidth,
@@ -130,13 +156,14 @@ final class CleanupScanner {
         CleanupRules.wastedBytes(group) { library.sizes[$0.localIdentifier] ?? 0 }
     }
 
-    /// Loads a small thumbnail from PhotoKit and fingerprints it.
+    /// Fingerprints a small thumbnail already on the device. Returns nil when
+    /// the photo is only in iCloud: downloading would use mobile data.
     nonisolated private static func fingerprint(of asset: PHAsset) -> DuplicateMatcher.Fingerprint? {
         let options = PHImageRequestOptions()
         options.isSynchronous = true
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .fast
-        options.isNetworkAccessAllowed = true
+        options.isNetworkAccessAllowed = false
         var image: UIImage?
         let side = CGFloat(DuplicateMatcher.compareSide)
         PHImageManager.default().requestImage(

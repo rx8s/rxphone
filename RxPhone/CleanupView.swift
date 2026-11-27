@@ -5,6 +5,11 @@ struct CleanupView: View {
     let library: PhotoLibrary
     @State private var scanner = CleanupScanner()
 
+    private struct SyncKey: Equatable {
+        let revision: Int
+        let isScanning: Bool
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -32,6 +37,11 @@ struct CleanupView: View {
         }
         .task(id: library.isLoaded) {
             if library.isLoaded && scanner.state == .idle { await scanner.scan(library) }
+        }
+        // Re-runs on every library change and when a scan ends, so changes
+        // made during a scan are caught too.
+        .task(id: SyncKey(revision: library.revision, isScanning: scanner.isScanning)) {
+            await scanner.sync(with: library)
         }
     }
 
@@ -67,6 +77,13 @@ struct CleanupView: View {
                 Text(count == 0 ? "ไม่พบรายการที่ควรลบ" : "จาก \(count) รายการ")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                if scanner.skippedInCloud > 0 {
+                    Label("ข้าม \(scanner.skippedInCloud) รูปที่อยู่ใน iCloud ตอนหารูปซ้ำ (ไม่ดาวน์โหลดเพื่อประหยัดเน็ต)",
+                          systemImage: "icloud")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,6 +207,10 @@ struct CleanupDetailView: View {
         }
         .sensoryFeedback(.warning, trigger: warnTrigger)
         .onAppear(perform: preselect)
+        .onChange(of: flatAssets.map(\.localIdentifier)) { _, ids in
+            // Items deleted elsewhere must not stay selected.
+            selection.formIntersection(ids)
+        }
         .alert("ลบไม่สำเร็จ", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
