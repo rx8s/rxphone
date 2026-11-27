@@ -98,7 +98,13 @@ struct CategoryGridScreen: View {
 
     var body: some View {
         AssetGridScreen(library: library, title: category.title,
-                        assets: library.assets(in: category), source: .category(category))
+                        assets: library.assets(in: category), source: .category(category),
+                        sort: $library.categorySortOrder)
             .navigationBarTitleDisplayMode(.inline)
+            .task(id: library.categorySortOrder) {
+                if library.categorySortOrder == .largest {
+                    await library.measure(library.assets(in: category))
+                }
+            }
     }
 }

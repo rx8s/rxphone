@@ -21,7 +21,8 @@ final class RxPhoneUITests: XCTestCase {
         XCTAssertTrue(firstCell.waitForExistence(timeout: 10), "No photos in the library")
     }
 
-    private static let defaults = ["-mediaFilter", "all", "-sortOrder", "newest"]
+    private static let defaults = ["-mediaFilter", "all", "-sortOrder", "newest",
+                                   "-categorySortOrder", "newest"]
 
     /// Taps a filter back to ทั้งหมด. The app saves the choice, so tests that
     /// change it put it back and leave the Simulator as they found it.
@@ -253,9 +254,34 @@ final class RxPhoneUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
         XCTAssertTrue(firstCell.waitForExistence(timeout: 5), "Category grid is empty")
         XCTAssertTrue(app.navigationBars.buttons["เลือก"].isEnabled)
-        // No library-wide controls inside a category.
-        XCTAssertFalse(app.navigationBars.buttons["เรียงตาม"].exists)
+        // Categories have their own sort menu, but no photo/video filter.
+        app.navigationBars.buttons["เรียงตาม"].tap()
+        XCTAssertTrue(app.buttons["เก่าสุดก่อน"].waitForExistence(timeout: 3))
+        app.buttons["ใหม่สุดก่อน"].tap()
         XCTAssertFalse(segment("ทั้งหมด").exists)
+    }
+
+    func testDateRangeSheetSelectsByDay() {
+        enterSelectMode()
+        app.navigationBars.buttons["เลือกตามช่วงวันที่"].tap()
+        let count = app.descendants(matching: .any)["date-range-count"]
+        XCTAssertTrue(count.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.datePickers.count >= 2 || app.buttons["ตั้งแต่"].exists || app.staticTexts["ตั้งแต่"].exists)
+        // Picks the newest day by default, so at least the newest item matches.
+        let choose = app.buttons["เลือก"].firstMatch
+        XCTAssertTrue(choose.isEnabled)
+        choose.tap()
+        XCTAssertTrue(count.waitForNonExistence(timeout: 3))
+        XCTAssertNotEqual(selectionCount.label, "เลือก 0 รายการ")
+    }
+
+    func testVideoHasScrubber() {
+        segment("วีดีโอ").tap()
+        XCTAssertTrue(firstCell.waitForExistence(timeout: 5))
+        _ = openViewer(on: firstCell)
+        XCTAssertTrue(app.sliders["ตำแหน่งวีดีโอ"].waitForExistence(timeout: 3))
+        app.buttons["ปิด"].tap()
+        resetFilter()
     }
 
     // MARK: - Viewer

@@ -9,7 +9,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack {
             AssetGridScreen(library: library, title: "คลัง", assets: library.shownAssets,
-                            source: .library, showsLibraryControls: true)
+                            source: .library, sort: $library.sortOrder, showsLibraryControls: true)
         }
     }
 }
@@ -24,6 +24,8 @@ struct AssetGridScreen: View {
     /// Where `assets` came from; the viewer reloads from it on changes.
     let source: AssetSource
     /// The library-wide filter bar, sort menu and limited-access banner.
+    /// The sort order the toolbar menu changes; no menu when nil.
+    var sort: Binding<SortOrder>?
     var showsLibraryControls = false
 
     @State private var isSelecting = false
@@ -32,6 +34,7 @@ struct AssetGridScreen: View {
     @State private var toast: String?
     @State private var errorMessage: String?
     @State private var viewer: ViewerTarget?
+    @State private var showsDateRange = false
 
     private struct ViewerTarget: Identifiable { let id: String }
 
@@ -77,6 +80,12 @@ struct AssetGridScreen: View {
         grid
             .navigationTitle(title)
             .toolbar { toolbar }
+        .sheet(isPresented: $showsDateRange) {
+            DateRangeSheet(assets: assets) { ids in
+                selection.formUnion(ids)
+                show("เลือกเพิ่ม \(ids.count) รายการตามช่วงวันที่")
+            }
+        }
         .fullScreenCover(item: $viewer) { target in
             AssetViewer(library: library, source: source, startID: target.id)
                 // Lets the grid show through while swiping down to close.
@@ -275,7 +284,7 @@ struct AssetGridScreen: View {
     }
 
     /// File sizes on thumbnails, only while the library is sorted by size.
-    private var showsSizes: Bool { showsLibraryControls && library.sortOrder == .largest }
+    private var showsSizes: Bool { sort?.wrappedValue == .largest }
 
     @ViewBuilder
     private var emptyState: some View {
@@ -338,7 +347,9 @@ struct AssetGridScreen: View {
                 Task { await deleteSelected() }
             } label: {
                 if isDeleting {
-                    ProgressView()
+                    // White to stay visible on the red button; the default
+                    // gray spinner almost disappears on it.
+                    ProgressView().tint(.white)
                 } else {
                     Label("ลบ", systemImage: "trash")
                 }
@@ -383,10 +394,10 @@ struct AssetGridScreen: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        if showsLibraryControls && library.hasAccess {
+        if let sort, library.hasAccess {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
-                    Picker("เรียงตาม", selection: $library.sortOrder) {
+                    Picker("เรียงตาม", selection: sort) {
                         ForEach(SortOrder.allCases) { Text($0.rawValue).tag($0) }
                     }
                 } label: {
@@ -396,6 +407,14 @@ struct AssetGridScreen: View {
             }
         }
         if library.hasAccess {
+            if isSelecting {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showsDateRange = true } label: {
+                        Label("เลือกตามช่วงวันที่", systemImage: "calendar")
+                    }
+                    .disabled(isDeleting)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isSelecting ? "เสร็จ" : "เลือก") {
                     isSelecting.toggle()

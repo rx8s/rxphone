@@ -43,6 +43,24 @@ struct ViewerMathTests {
                 == CGSize(width: -600, height: 999))
     }
 
+    @Test("An image is fitted inside the view keeping its shape")
+    func fitted() {
+        #expect(ViewerMath.fittedSize(CGSize(width: 4000, height: 3000), in: view) == CGSize(width: 400, height: 300))
+        #expect(ViewerMath.fittedSize(CGSize(width: 1000, height: 4000), in: view) == CGSize(width: 200, height: 800))
+        #expect(ViewerMath.fittedSize(.zero, in: view) == view)
+    }
+
+    @Test("A wide photo only pans vertically once zoomed taller than the view")
+    func widePhotoPan() {
+        let wide = CGSize(width: 400, height: 300)   // 4:3 photo fitted in 400×800
+        // 2×: 800×600, still shorter than the view → no vertical movement.
+        #expect(ViewerMath.clampedOffset(CGSize(width: 999, height: 999), viewSize: view,
+                                         contentSize: wide, scale: 2) == CGSize(width: 200, height: 0))
+        // 4×: 1600×1200 → 400 pt of slack vertically, split 200 each way.
+        #expect(ViewerMath.clampedOffset(CGSize(width: -999, height: -999), viewSize: view,
+                                         contentSize: wide, scale: 4) == CGSize(width: -600, height: -200))
+    }
+
     // MARK: - Swipe down to close
 
     @Test("Closes after a long enough drag or a fast fling, not a short drag")

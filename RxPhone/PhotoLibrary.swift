@@ -82,6 +82,11 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
     /// File size in bytes, keyed by `PHAsset.localIdentifier`.
     private(set) var sizes: [String: Int64] = [:]
 
+    /// Order inside every category, remembered separately from the คลัง tab.
+    var categorySortOrder: SortOrder = Preference.load("categorySortOrder", default: .newest) {
+        didSet { Preference.save(categorySortOrder, "categorySortOrder") }
+    }
+
     var sortOrder: SortOrder = Preference.load("sortOrder", default: .newest) {
         didSet {
             Preference.save(sortOrder, "sortOrder")
@@ -152,25 +157,38 @@ final class PhotoLibrary: NSObject, PHPhotoLibraryChangeObserver {
 
     /// Category lists fetched since the last reload, so views can ask for
     /// them on every render without re-fetching.
-    @ObservationIgnored private var categoryCache: [MediaCategory: (revision: Int, list: [PHAsset])] = [:]
+    @ObservationIgnored private var categoryCache: [MediaCategory: (key: CategoryCacheKey, list: [PHAsset])] = [:]
 
-    /// Photos and videos in a category's smart album, newest first. Reading
-    /// `revision` makes callers re-render after every library change.
+    private struct CategoryCacheKey: Equatable {
+        let revision: Int
+        let order: SortOrder
+        /// Sizes known so far; a size sort is redone as more are measured.
+        let measured: Int
+    }
+
+    /// Photos and videos in a category's smart album, in `categorySortOrder`.
+    /// Reading `revision` (and sizes, when sorting by size) makes callers
+    /// re-render after every change that affects the list.
     func assets(in category: MediaCategory) -> [PHAsset] {
-        let current = revision
-        if let cached = categoryCache[category], cached.revision == current { return cached.list }
-        let list = fetchAssets(in: category)
-        categoryCache[category] = (current, list)
+        let order = categorySortOrder
+        let key = CategoryCacheKey(revision: revision, order: order,
+                                   measured: order == .largest ? sizes.count : 0)
+        if let cached = categoryCache[category], cached.key == key { return cached.list }
+        var list = fetchAssets(in: category, oldestFirst: order == .oldest)
+        if order == .largest {
+            list.sort { (sizes[$0.localIdentifier] ?? 0) > (sizes[$1.localIdentifier] ?? 0) }
+        }
+        categoryCache[category] = (key, list)
         return list
     }
 
-    private func fetchAssets(in category: MediaCategory) -> [PHAsset] {
+    private func fetchAssets(in category: MediaCategory, oldestFirst: Bool) -> [PHAsset] {
         guard hasAccess,
               let album = PHAssetCollection.fetchAssetCollections(
                   with: .smartAlbum, subtype: category.smartAlbum, options: nil
               ).firstObject else { return [] }
         let options = PHFetchOptions()
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: oldestFirst)]
         let result = PHAsset.fetchAssets(in: album, options: options)
         var list: [PHAsset] = []
         list.reserveCapacity(result.count)

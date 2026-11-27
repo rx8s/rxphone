@@ -16,6 +16,8 @@ struct AssetViewer: View {
     /// Vertical distance of an in-progress swipe-down-to-close.
     @State private var dragOffset: CGFloat = 0
     @State private var dragAxis: Axis?
+    /// Bottom safe-area inset; the pager ignores it, so pages get it passed in.
+    @State private var bottomInset: CGFloat = 0
 
     /// 0 at rest, 1 when dragged far enough to be fully faded.
     private var dragProgress: CGFloat { ViewerMath.dismissProgress(offset: dragOffset) }
@@ -44,6 +46,7 @@ struct AssetViewer: View {
                 .scaleEffect(1 - dragProgress * 0.25)
                 .offset(y: dragOffset)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomInset = $0 }
         .simultaneousGesture(dismissDrag, including: isZoomed ? .subviews : .all)
         .accessibilityAction(.escape) { dismiss() }
         .overlay(alignment: .top) { if showsChrome && dragOffset == 0 { topBar.transition(.opacity) } }
@@ -72,6 +75,9 @@ struct AssetViewer: View {
                         asset: asset,
                         isCurrent: asset.localIdentifier == position,
                         isZoomed: $isZoomed,
+                        showsControls: showsChrome && dragOffset == 0,
+                        // Just above the bottom bar (44 pt buttons).
+                        controlsBottom: bottomInset + 52,
                         onTap: { withAnimation(.easeInOut(duration: 0.2)) { showsChrome.toggle() } }
                     )
                     .containerRelativeFrame([.horizontal, .vertical])
@@ -223,9 +229,18 @@ private struct AssetPage: View {
     let asset: PHAsset
     let isCurrent: Bool
     @Binding var isZoomed: Bool
+    /// Whether the viewer's bars are showing; the video slider follows them.
+    let showsControls: Bool
+    /// Distance from the bottom edge to place the video slider at.
+    let controlsBottom: CGFloat
     let onTap: () -> Void
 
     @Environment(\.displayScale) private var displayScale
+    /// Playback position in seconds, updated while playing and while scrubbing.
+    @State private var currentTime: Double = 0
+    @State private var isScrubbing = false
+    @State private var resumeAfterScrub = false
+    @State private var timeObserver: Any?
     @State private var image: UIImage?
     @State private var requestID: PHImageRequestID?
     @State private var player: AVPlayer?
@@ -252,6 +267,14 @@ private struct AssetPage: View {
                 if asset.mediaType == .video { videoLayer }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(alignment: .bottom) {
+                if asset.mediaType == .video && showsControls {
+                    scrubber
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, controlsBottom)
+                        .transition(.opacity)
+                }
+            }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) {
                 guard asset.mediaType == .image else { return }
@@ -296,8 +319,77 @@ private struct AssetPage: View {
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { note in
             guard let item = note.object as? AVPlayerItem, item == player?.currentItem else { return }
             player?.seek(to: .zero)
+            currentTime = 0
             isPlaying = false
         }
+    }
+
+    /// Drag to jump within the video; shows elapsed and total time.
+    private var scrubber: some View {
+        let duration = max(asset.duration, 0.1)
+        return HStack(spacing: 10) {
+            Text(ViewerMath.durationText(min(currentTime, duration)))
+            Slider(
+                value: Binding(get: { min(currentTime, duration) }, set: { currentTime = $0; seek(to: $0) }),
+                in: 0...duration,
+                onEditingChanged: scrubbing
+            )
+            .tint(.white)
+            .accessibilityLabel("ตำแหน่งวีดีโอ")
+            .accessibilityValue("\(ViewerMath.durationText(currentTime)) จาก \(ViewerMath.durationText(duration))")
+            Text(ViewerMath.durationText(duration))
+        }
+        .font(.caption)
+        .monospacedDigit()
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.4), in: Capsule())
+    }
+
+    /// Pauses while the slider is held and resumes afterwards if it was playing.
+    private func scrubbing(_ editing: Bool) {
+        if editing {
+            resumeAfterScrub = isPlaying
+            isScrubbing = true
+            player?.pause()
+            isPlaying = false
+            Task { _ = await preparePlayer() }
+            return
+        }
+        Task {
+            guard let player = await preparePlayer() else { isScrubbing = false; return }
+            await player.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600),
+                              toleranceBefore: .zero, toleranceAfter: .zero)
+            isScrubbing = false
+            if resumeAfterScrub {
+                player.play()
+                isPlaying = true
+            }
+        }
+    }
+
+    private func seek(to seconds: Double) {
+        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
+                     toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// Creates the player on first use and keeps `currentTime` in step with it.
+    private func preparePlayer() async -> AVPlayer? {
+        if let player { return player }
+        guard let item = await PhotoLibrary.playerItem(for: asset) else { return nil }
+        let player = AVPlayer(playerItem: item)
+        let isScrubbing = $isScrubbing
+        let currentTime = $currentTime
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main
+        ) { time in
+            MainActor.assumeIsolated {
+                if !isScrubbing.wrappedValue { currentTime.wrappedValue = time.seconds }
+            }
+        }
+        self.player = player
+        return player
     }
 
     private func togglePlayback() {
@@ -307,12 +399,9 @@ private struct AssetPage: View {
             return
         }
         Task {
-            if player == nil {
-                guard let item = await PhotoLibrary.playerItem(for: asset) else { return }
-                player = AVPlayer(playerItem: item)
-            }
+            guard let player = await preparePlayer() else { return }
             try? AVAudioSession.sharedInstance().setCategory(.playback)
-            player?.play()
+            player.play()
             isPlaying = true
         }
     }
@@ -362,7 +451,10 @@ private struct AssetPage: View {
 
     /// Keeps the zoomed image from being dragged past its edges.
     private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
-        ViewerMath.clampedOffset(proposed, viewSize: size, scale: scale)
+        let fitted = ViewerMath.fittedSize(
+            CGSize(width: asset.pixelWidth, height: asset.pixelHeight), in: size
+        )
+        return ViewerMath.clampedOffset(proposed, viewSize: size, contentSize: fitted, scale: scale)
     }
 
     // MARK: Loading
@@ -386,8 +478,11 @@ private struct AssetPage: View {
         requestID = nil
         image = nil
         player?.pause()
+        if let timeObserver { player?.removeTimeObserver(timeObserver) }
+        timeObserver = nil
         player = nil
         isPlaying = false
+        currentTime = 0
     }
 }
 

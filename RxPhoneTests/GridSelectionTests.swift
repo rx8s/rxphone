@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import RxPhone
 
@@ -113,5 +114,37 @@ struct GridSelectionTests {
         #expect(scrollStep(765 - 40) == 9)     // halfway into the bottom zone
         #expect(scrollStep(765) == 18)
         #expect(scrollStep(860) == 18)         // over the selection bar: capped
+    }
+
+    // MARK: - Date range
+
+    private var utc: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    private func day(_ d: Int, hour: Int = 12) -> Date {
+        utc.date(from: DateComponents(year: 2026, month: 11, day: d, hour: hour))!
+    }
+
+    @Test("A date range includes whole first and last days")
+    func dateRangeWholeDays() {
+        let items: [(id: String, date: Date?)] = [
+            ("before", day(9, hour: 23)), ("startOfFirst", day(10, hour: 0)),
+            ("middle", day(11)), ("endOfLast", day(12, hour: 23)), ("after", day(13, hour: 0)),
+        ]
+        let picked = GridSelection.ids(in: items, from: day(10, hour: 15), to: day(12, hour: 1), calendar: utc)
+        #expect(picked == ["startOfFirst", "middle", "endOfLast"])
+    }
+
+    @Test("Dates in either order give the same range; undated items are skipped")
+    func dateRangeOrderAndUndated() {
+        let items: [(id: String, date: Date?)] = [("a", day(10)), ("b", nil), ("c", day(11))]
+        let forward = GridSelection.ids(in: items, from: day(10), to: day(11), calendar: utc)
+        let backward = GridSelection.ids(in: items, from: day(11), to: day(10), calendar: utc)
+        #expect(forward == ["a", "c"])
+        #expect(backward == forward)
+        #expect(GridSelection.ids(in: items, from: day(20), to: day(21), calendar: utc).isEmpty)
     }
 }

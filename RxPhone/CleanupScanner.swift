@@ -70,7 +70,8 @@ final class CleanupScanner {
         let all = library.assets
         scannedIDs = Set(all.map(\.localIdentifier))
 
-        let shots = all.filter { $0.mediaType == .image && $0.mediaSubtypes.contains(.photoScreenshot) }
+        // Same source as the หมวดหมู่ tab, so both pages count the same screenshots.
+        let shots = library.assets(in: .screenshots)
         let videos = all.filter { $0.mediaType == .video }
         await library.measure(shots + videos)
         screenshots = shots.sorted { ($0.creationDate ?? .distantPast) > ($1.creationDate ?? .distantPast) }

@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 
 /// Pure math behind drag-to-select and auto-scroll in the library grid, kept
@@ -42,5 +43,18 @@ nonisolated enum GridSelection {
             return maxStep * min((fingerY - (visibleBottom - edge)) / edge, 1)
         }
         return 0
+    }
+
+    /// Items taken on any day from `from` through `to` (whole days, in either
+    /// order). Items without a date are never included.
+    static func ids<ID>(in items: [(id: ID, date: Date?)], from: Date, to: Date,
+                        calendar: Calendar = .current) -> [ID] {
+        let start = calendar.startOfDay(for: min(from, to))
+        guard let end = calendar.date(byAdding: .day, value: 1,
+                                      to: calendar.startOfDay(for: max(from, to))) else { return [] }
+        return items.filter { item in
+            guard let date = item.date else { return false }
+            return date >= start && date < end
+        }.map(\.id)
     }
 }

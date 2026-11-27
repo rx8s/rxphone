@@ -15,10 +15,22 @@ nonisolated enum ViewerMath {
         return index > 0 ? ids[index - 1] : nil
     }
 
-    /// Keeps a zoomed image from being dragged past its edges.
-    static func clampedOffset(_ proposed: CGSize, viewSize: CGSize, scale: CGFloat) -> CGSize {
-        let maxX = max(viewSize.width * (scale - 1) / 2, 0)
-        let maxY = max(viewSize.height * (scale - 1) / 2, 0)
+    /// The size an image of `pixelSize` takes when fitted inside `viewSize`.
+    static func fittedSize(_ pixelSize: CGSize, in viewSize: CGSize) -> CGSize {
+        guard pixelSize.width > 0, pixelSize.height > 0 else { return viewSize }
+        let ratio = min(viewSize.width / pixelSize.width, viewSize.height / pixelSize.height)
+        return CGSize(width: pixelSize.width * ratio, height: pixelSize.height * ratio)
+    }
+
+    /// Keeps a zoomed image from being dragged past its edges. `contentSize`
+    /// is the image as fitted on screen (the whole view when nil): a wide
+    /// photo leaves bars above and below, so it may only pan vertically once
+    /// zoomed taller than the view.
+    static func clampedOffset(_ proposed: CGSize, viewSize: CGSize, contentSize: CGSize? = nil,
+                              scale: CGFloat) -> CGSize {
+        let content = contentSize ?? viewSize
+        let maxX = max((content.width * scale - viewSize.width) / 2, 0)
+        let maxY = max((content.height * scale - viewSize.height) / 2, 0)
         return CGSize(width: min(max(proposed.width, -maxX), maxX),
                       height: min(max(proposed.height, -maxY), maxY))
     }

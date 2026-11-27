@@ -326,7 +326,9 @@ struct CleanupDetailView: View {
                 Task { await deleteSelected() }
             } label: {
                 if isDeleting {
-                    ProgressView()
+                    // White to stay visible on the red button; the default
+                    // gray spinner almost disappears on it.
+                    ProgressView().tint(.white)
                 } else {
                     Label("ลบ", systemImage: "trash")
                 }
