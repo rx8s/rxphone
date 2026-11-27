@@ -372,5 +372,13 @@ struct CleanupDetailView: View {
 }
 
 extension Int64 {
-    var fileSizeText: String { ByteCountFormatter.string(fromByteCount: self, countStyle: .file) }
+    var fileSizeText: String { Self.fileSizeFormatter.string(fromByteCount: self) }
+
+    /// Writes "0 KB" rather than "Zero KB".
+    private static let fileSizeFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
 }
