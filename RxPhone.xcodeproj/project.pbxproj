@@ -66,6 +66,7 @@
 		5CAD670F01918D5F0AB9288E /* GridSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridSelection.swift; sourceTree = "<group>"; };
 		6CE646858019DBD329FCDCCC /* AssetThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetThumbnail.swift; sourceTree = "<group>"; };
 		97F12A99C4754AE467B92AFA /* PreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceTests.swift; sourceTree = "<group>"; };
+		A0B451EFBF049AF50EF8C77D /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A69CF2B05FA40A9505B55628 /* MediaCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCategory.swift; sourceTree = "<group>"; };
 		ABB8A3F08208A78341802D3D /* AssetViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetViewer.swift; sourceTree = "<group>"; };
 		B4928ADD43944CADA0410CB5 /* RxPhoneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RxPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -140,10 +141,20 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		8B86E0D17A5CF49A4690D66D /* rxphone */ = {
+			isa = PBXGroup;
+			children = (
+				A0B451EFBF049AF50EF8C77D /* Signing.xcconfig */,
+			);
+			name = rxphone;
+			path = .;
+			sourceTree = "<group>";
+		};
 		A77147BED169481F6E9566EA = {
 			isa = PBXGroup;
 			children = (
 				13DD32622184ACA53AF1D618 /* RxPhone */,
+				8B86E0D17A5CF49A4690D66D /* rxphone */,
 				4259C397588F063B61736DB1 /* RxPhoneTests */,
 				DDA9CE586742444151068A79 /* RxPhoneUITests */,
 				658ED62DD287184F219C7D02 /* Products */,
@@ -369,6 +380,7 @@
 		};
 		888CFBC5E1F1460CBAAB5869 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0B451EFBF049AF50EF8C77D /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -433,6 +445,7 @@
 		};
 		9161AE1E138C65B382C3DA21 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A0B451EFBF049AF50EF8C77D /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;

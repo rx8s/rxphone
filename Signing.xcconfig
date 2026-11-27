@@ -1,0 +1,7 @@
+// Signing settings shared by every target.
+//
+// Your Apple Team ID goes in Local.xcconfig, which git ignores, so it never
+// ends up in the public repository. Copy Local.xcconfig.example to
+// Local.xcconfig and fill it in to run on a real device. The Simulator needs
+// no team.
+#include? "Local.xcconfig"
